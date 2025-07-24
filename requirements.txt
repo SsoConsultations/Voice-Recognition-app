@@ -1,6 +1,9 @@
 streamlit
-firebase-admin
 numpy
 scipy
 librosa
 scikit-learn
+firebase-admin
+sounddevice
+pyaudio 
+streamlit-audiorec
