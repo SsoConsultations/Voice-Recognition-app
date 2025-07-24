@@ -1,5 +1,4 @@
 streamlit
-streamlit-audiorec>=0.0.8
 firebase-admin
 numpy
 scipy
