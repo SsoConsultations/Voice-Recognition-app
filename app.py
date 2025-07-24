@@ -447,16 +447,6 @@ def main():
         # The height is crucial for the component to be visible
         # The key is also important here for Streamlit to manage the component's state
         recorded_audio_base64 = st.components.v1.html(custom_recorder_html, height=250, scrolling=False)
-
-        if recorded_audio_base64:
-            st.info("Audio received from custom recorder! Now you can save it.")
-            # The base64 string will have a prefix like "data:audio/wav;base64,"
-            # We need to remove this prefix before decoding.
-            if "," in recorded_audio_base64:
-                header, encoded = recorded_audio_base64.split(",", 1)
-            else:
-                # Handle cases where the prefix might be missing (unlikely but safe)
-                encoded = recorded_audio_base64
             
             try:
                 wav_audio_data = base64.b64decode(encoded)
