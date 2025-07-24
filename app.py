@@ -329,9 +329,9 @@ def main():
         person_name = st.text_input("Enter the name of the person to record:")
         
         # Use streamlit-audiorec for recording
-        # The key is important if you have multiple st_audiorec instances
+        # Removed 'key' argument as per your request.
+        # This might lead to 'StreamlitAPIException: DuplicateWidgetID' if not managed carefully.
         wav_audio_data = st_audiorec(
-            key = "add_speaker_recorder",
             loop_duration=DEFAULT_DURATION,
             start_text="Click to Start Recording",
             stop_text="Click to Stop Recording",
@@ -403,8 +403,9 @@ def main():
             return
 
         # Use streamlit-audiorec for live recording
+        # Removed 'key' argument as per your request.
+        # This might lead to 'StreamlitAPIException: DuplicateWidgetID' if not managed carefully.
         live_wav_audio_data = st_audiorec(
-            key="live_recognition_recorder",
             loop_duration=DEFAULT_DURATION,
             start_text="Click to Start Live Recognition Recording",
             stop_text="Click to Stop Live Recognition Recording",
@@ -412,8 +413,6 @@ def main():
         )
 
         if live_wav_audio_data is not None:
-            st.audio(live_wav_audio_data, format='audio/wav')
-            
             if st.button("Analyze Live Recording"):
                 with st.spinner("Analyzing live recording..."):
                     # Process the audio data directly from bytes
@@ -439,4 +438,3 @@ if __name__ == "__main__":
     # Ensure temporary recordings directory exists at startup
     os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
     main()
-#dummy check
