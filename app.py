@@ -329,6 +329,7 @@ def main():
         person_name = st.text_input("Enter the name of the person to record:")
         
         # Use streamlit-audiorec for recording
+        # The key is important if you have multiple st_audiorec instances
         wav_audio_data = st_audiorec(
             key="add_speaker_recorder",
             loop_duration=DEFAULT_DURATION,
@@ -337,28 +338,35 @@ def main():
             return_data_type="bytes"
         )
 
-        if st.button("Save Recorded Sample to Firebase") and person_name and wav_audio_data:
-            os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{timestamp}.wav")
-            cloud_filename = f"{person_name}/{person_name}_sample_{timestamp}.wav"
+        # Only show the save button if audio data has been captured AND a person name is entered
+        if wav_audio_data is not None:
+            if st.button("Save Recorded Sample to Firebase") and person_name:
+                os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{timestamp}.wav")
+                cloud_filename = f"{person_name}/{person_name}_sample_{timestamp}.wav"
 
-            with open(local_filename, "wb") as f:
-                f.write(wav_audio_data)
+                with open(local_filename, "wb") as f:
+                    f.write(wav_audio_data)
 
-            if upload_to_firebase(local_filename, cloud_filename):
-                st.success(f"Sample for {person_name} uploaded successfully!")
-                os.remove(local_filename)
-                
-                # Invalidate cache for training data so next training uses new data
-                st.cache_data.clear() 
-                st.cache_resource.clear() # Clear model cache too so it retrains
-                st.warning("New data added! The model needs to be retrained for these changes to take effect. The app will now reload to retrain.")
-                st.experimental_rerun() # Rerun the app to trigger retraining
-            else:
-                st.error("Failed to save sample. Check console for details.")
-                if os.path.exists(local_filename):
-                    os.remove(local_filename) # Clean up even on upload failure
+                if upload_to_firebase(local_filename, cloud_filename):
+                    st.success(f"Sample for {person_name} uploaded successfully!")
+                    os.remove(local_filename)
+                    
+                    # Invalidate cache for training data so next training uses new data
+                    # Clear both data and resource caches to ensure everything is reloaded/retrained
+                    st.cache_data.clear() 
+                    st.cache_resource.clear() 
+                    st.warning("New data added! The model needs to be retrained for these changes to take effect. The app will now reload to retrain.")
+                    st.experimental_rerun() # Rerun the app to trigger retraining
+                else:
+                    st.error("Failed to save sample. Check console for details.")
+                    if os.path.exists(local_filename):
+                        os.remove(local_filename) # Clean up even on upload failure
+            elif st.button("Save Recorded Sample to Firebase"): # This case handles button click without person_name
+                st.warning("Please enter a person's name before saving the recording.")
+        else:
+            st.info("Record your voice using the recorder above, then enter a name and click 'Save Recorded Sample'.")
 
 
     elif app_mode == "Recognize Speaker from File":
