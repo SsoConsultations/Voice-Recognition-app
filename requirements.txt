@@ -4,6 +4,4 @@ scipy
 librosa
 scikit-learn
 firebase-admin
-sounddevice
-pyaudio 
 streamlit-audiorec
