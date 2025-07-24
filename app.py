@@ -9,11 +9,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 import pickle
 import time
-from io import BytesIO
 import json # Import json to parse the service account key
-
-# Streamlit custom component for audio recording
-from st_audiorec import st_audiorec
+import base64 # Import base64 for decoding audio data from JS
 
 # Firebase imports
 import firebase_admin
@@ -25,9 +22,9 @@ LABELS_FILENAME = 'id_to_label_map.pkl'
 TEMP_RECORDINGS_DIR = "temp_recordings" # For temporary local storage during processing
 
 # Recording Specific (defaults, but actual recording is via browser API)
-DEFAULT_NUM_SAMPLES = 5
-DEFAULT_DURATION = 4.0
-DEFAULT_SAMPLE_RATE = 44100 # Streamlit-audiorec captures at 44100 Hz
+DEFAULT_NUM_SAMPLES = 5 # This is less relevant for a single custom recording
+DEFAULT_DURATION = 4.0 # Duration for the custom recorder
+DEFAULT_SAMPLE_RATE = 44100 # Standard sample rate
 
 # Feature Extraction Specific
 N_MFCC = 13 # Number of MFCCs to extract
@@ -40,10 +37,6 @@ def initialize_firebase():
     if not firebase_admin._apps: # Check if app is already initialized
         try:
             # Load credentials from Streamlit secrets
-            # The service account key JSON should be stored as a single string
-            # in your Streamlit secrets.toml file under a key like 'firebase_service_account_key'
-            # The bucket name should also be in secrets
-            
             cred_json_str = st.secrets["firebase_service_account_key"]
             bucket_name = st.secrets["firebase_storage_bucket"]
 
@@ -90,7 +83,6 @@ def download_from_firebase(source_blob_name, local_file_path):
         bucket = storage.bucket()
         blob = bucket.blob(source_blob_name)
         blob.download_to_filename(local_file_path)
-        # st.info(f"⬇️ Downloaded {source_blob_name} to {os.path.basename(local_file_path)}")
         return True
     except Exception as e:
         st.error(f"❌ Error downloading {source_blob_name} from Firebase: {e}")
@@ -108,7 +100,7 @@ def list_firebase_files(prefix=""):
 
 # --- Utility Functions (modified for Streamlit & Firebase) ---
 
-@st.cache_data(show_spinner=False) # Don't show spinner if it's too fast, manage manually
+@st.cache_data(show_spinner=False)
 def extract_features(file_path, n_mfcc=N_MFCC):
     """
     Extracts MFCCs from an audio file.
@@ -160,7 +152,6 @@ def load_data_from_firebase():
             label_id_counter += 1
 
         current_label_id = labels_map[speaker_name]
-        # st.info(f"Processing speaker: {speaker_name} (ID: {current_label_id})")
 
         speaker_has_audio = False
         speaker_blobs = list_firebase_files(prefix=f"{speaker_name}/")
@@ -193,7 +184,6 @@ def load_data_from_firebase():
 
     return np.array(X), np.array(y), labels_map, id_to_label
 
-# Cache the model and labels to avoid retraining on every rerun of the app
 @st.cache_resource(show_spinner="Training model...")
 def train_and_save_model():
     """
@@ -240,26 +230,19 @@ def train_and_save_model():
     st.code(classification_report(y_test, y_pred, target_names=id_to_label))
 
     # Save the trained model and the ID-to-label mapping locally (Streamlit Cloud ephemeral)
-    # For robust persistence, you'd save these to Firebase Storage as well
     with open(MODEL_FILENAME, 'wb') as f:
         pickle.dump(model, f)
     with open(LABELS_FILENAME, 'wb') as f:
         pickle.dump(id_to_label, f)
     st.info(f"Model saved locally to {MODEL_FILENAME} and {LABELS_FILENAME}")
     
-    # Optional: Upload model/labels to Firebase Storage for robust persistence across deployments
-    # if upload_to_firebase(MODEL_FILENAME, MODEL_FILENAME):
-    #     st.success("Model uploaded to Firebase Storage.")
-    # if upload_to_firebase(LABELS_FILENAME, LABELS_FILENAME):
-    #     st.success("Labels uploaded to Firebase Storage.")
-
     return model, id_to_label
 
 @st.cache_resource(show_spinner="Loading model...")
 def load_trained_model_and_labels():
     """
     Loads a pre-trained model and label mapping from local disk.
-    If not found, it attempts to retrain or download from Firebase (if you implement that).
+    If not found, it attempts to retrain or download from Firebase.
     """
     try:
         with open(MODEL_FILENAME, 'rb') as f:
@@ -270,7 +253,6 @@ def load_trained_model_and_labels():
         return model, id_to_label
     except FileNotFoundError:
         st.warning("Model or labels file not found locally. Attempting to train a new model from Firebase data.")
-        # If model is not found locally, try to train it from Firebase data
         return train_and_save_model()
 
 
@@ -312,6 +294,9 @@ def main():
     st.title("🗣️ Speaker Recognition App")
     st.markdown("Powered by Firebase Cloud Storage for voice data.")
 
+    # Ensure temporary recordings directory exists at startup
+    os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
+
     # Initialize Firebase at the very beginning
     if not initialize_firebase():
         st.stop() # Stop the app if Firebase initialization fails
@@ -323,50 +308,187 @@ def main():
     app_mode = st.sidebar.radio("Choose a mode:", ["Add New Speaker Data", "Recognize Speaker from File", "Live Speaker Recognition"])
 
     if app_mode == "Add New Speaker Data":
-        st.header("1. Add New Speaker Voice Data")
-        st.info("Record multiple samples for a new or existing speaker. This data will be uploaded to Firebase Cloud Storage and used to (re)train the model.")
+        st.header("1. Add New Speaker Voice Data (Custom Recorder)")
+        st.info("Record a sample for a new or existing speaker using the custom recorder. This data will be uploaded to Firebase Cloud Storage and used to (re)train the model.")
 
-        person_name = st.text_input("Enter the name of the person to record:")
-        
-        # Use streamlit-audiorec for recording
-        # Removed 'key' argument as per your request.
-        # This might lead to 'StreamlitAPIException: DuplicateWidgetID' if not managed carefully.
-        wav_audio_data = st_audiorec(
-            loop_duration=DEFAULT_DURATION,
-            start_text="Click to Start Recording",
-            stop_text="Click to Stop Recording",
-            return_data_type="bytes"
-        )
+        person_name = st.text_input("Enter the name of the person to record:", key="add_person_name_input")
 
-        # Only show the save button if audio data has been captured AND a person name is entered
-        if wav_audio_data is not None:
-            if st.button("Save Recorded Sample to Firebase") and person_name:
-                os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{timestamp}.wav")
-                cloud_filename = f"{person_name}/{person_name}_sample_{timestamp}.wav"
+        # --- Custom HTML/JS Recorder Component ---
+        # The JavaScript here handles microphone access, recording, and sending Base64 data to Python.
+        # It's embedded directly into the HTML component for simplicity.
+        custom_recorder_html = f"""
+        <style>
+            .recorder-container {{
+                border: 1px solid #ddd;
+                padding: 15px;
+                border-radius: 8px;
+                background-color: #f9f9f9;
+                text-align: center;
+            }}
+            .recorder-button {{
+                background-color: #4CAF50; /* Green */
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                margin: 5px;
+                transition: background-color 0.3s ease;
+            }}
+            .recorder-button:hover:not(:disabled) {{
+                background-color: #45a049;
+            }}
+            .recorder-button:disabled {{
+                background-color: #cccccc;
+                cursor: not-allowed;
+            }}
+            #stopButton {{
+                background-color: #f44336; /* Red */
+            }}
+            #stopButton:hover:not(:disabled) {{
+                background-color: #da190b;
+            }}
+            #audioPlayback {{
+                width: 90%;
+                margin-top: 15px;
+            }}
+            #status {{
+                margin-top: 10px;
+                font-weight: bold;
+                color: #333;
+            }}
+        </style>
+        <div class="recorder-container">
+            <button id="recordButton" class="recorder-button">Start Recording</button>
+            <button id="stopButton" class="recorder-button" disabled>Stop Recording</button>
+            <audio id="audioPlayback" controls style="display:block;margin: 15px auto;"></audio>
+            <div id="status">Status: Ready</div>
+        </div>
 
-                with open(local_filename, "wb") as f:
-                    f.write(wav_audio_data)
+        <script>
+            const recordButton = document.getElementById('recordButton');
+            const stopButton = document.getElementById('stopButton');
+            const audioPlayback = document.getElementById('audioPlayback');
+            const statusDiv = document.getElementById('status');
+            let mediaRecorder;
+            let audioChunks = [];
+            let stream; // To hold the media stream
 
-                if upload_to_firebase(local_filename, cloud_filename):
-                    st.success(f"Sample for {person_name} uploaded successfully!")
-                    os.remove(local_filename)
+            // Streamlit's way to communicate back to Python
+            const streamlit = window.Streamlit;
+
+            recordButton.onclick = async () => {{
+                audioChunks = [];
+                try {{
+                    stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
+                    mediaRecorder = new MediaRecorder(stream);
                     
-                    # Invalidate cache for training data so next training uses new data
-                    # Clear both data and resource caches to ensure everything is reloaded/retrained
-                    st.cache_data.clear() 
-                    st.cache_resource.clear() 
-                    st.warning("New data added! The model needs to be retrained for these changes to take effect. The app will now reload to retrain.")
-                    st.experimental_rerun() # Rerun the app to trigger retraining
-                else:
-                    st.error("Failed to save sample. Check console for details.")
-                    if os.path.exists(local_filename):
-                        os.remove(local_filename) # Clean up even on upload failure
-            elif st.button("Save Recorded Sample to Firebase"): # This case handles button click without person_name
-                st.warning("Please enter a person's name before saving the recording.")
-        else:
-            st.info("Record your voice using the recorder above, then enter a name and click 'Save Recorded Sample'.")
+                    mediaRecorder.ondataavailable = event => {{
+                        audioChunks.push(event.data);
+                    }};
+                    
+                    mediaRecorder.onstop = () => {{
+                        const audioBlob = new Blob(audioChunks, {{ type: 'audio/wav' }});
+                        const reader = new FileReader();
+                        reader.onloadend = () => {{
+                            const base64data = reader.result; // Base64 encoded string
+                            // Send data back to Streamlit
+                            streamlit.setComponentValue(base64data);
+                            audioPlayback.src = URL.createObjectURL(audioBlob);
+                            statusDiv.innerText = "Status: Recording stopped. Audio sent to Streamlit.";
+                            
+                            // Stop all tracks in the stream to release microphone
+                            if (stream) {{
+                                stream.getTracks().forEach(track => track.stop());
+                            }}
+                        }};
+                        reader.readAsDataURL(audioBlob);
+                    }};
+                    
+                    mediaRecorder.start();
+                    statusDiv.innerText = "Status: Recording... Speak now!";
+                    recordButton.disabled = true;
+                    stopButton.disabled = false;
+                    audioPlayback.removeAttribute('src'); // Clear previous playback
+                    
+                    // Automatically stop after DEFAULT_DURATION seconds
+                    setTimeout(() => {{
+                        if (mediaRecorder.state === 'recording') {{
+                            mediaRecorder.stop();
+                            statusDiv.innerText = "Status: Recording stopped automatically.";
+                            recordButton.disabled = false;
+                            stopButton.disabled = true;
+                        }}
+                    }}, {int(DEFAULT_DURATION * 1000)}); // Convert seconds to milliseconds
+                }} catch (err) {{
+                    statusDiv.innerText = "Status: Microphone access denied or error: " + err.name + " - " + err.message;
+                    console.error('Microphone access error:', err);
+                }}
+            }};
+
+            stopButton.onclick = () => {{
+                if (mediaRecorder && mediaRecorder.state === 'recording') {{
+                    mediaRecorder.stop();
+                    statusDiv.innerText = "Status: Recording stopped by user.";
+                    recordButton.disabled = false;
+                    stopButton.disabled = true;
+                }}
+            }};
+
+            // Initialize component, tell Streamlit its ready
+            // Use a small timeout to ensure the DOM is fully rendered before calculating height
+            setTimeout(() => {{
+                streamlit.setFrameHeight(document.documentElement.scrollHeight);
+            }}, 100);
+        </script>
+        """
+        # Render the custom component
+        # The height is crucial for the component to be visible
+        # The key is also important here for Streamlit to manage the component's state
+        recorded_audio_base64 = st.components.v1.html(custom_recorder_html, height=250, scrolling=False, key="custom_add_speaker_recorder")
+
+        if recorded_audio_base64:
+            st.info("Audio received from custom recorder! Now you can save it.")
+            # The base64 string will have a prefix like "data:audio/wav;base64,"
+            # We need to remove this prefix before decoding.
+            if "," in recorded_audio_base64:
+                header, encoded = recorded_audio_base64.split(",", 1)
+            else:
+                # Handle cases where the prefix might be missing (unlikely but safe)
+                encoded = recorded_audio_base64
+            
+            try:
+                wav_audio_data = base64.b64decode(encoded)
+                st.audio(wav_audio_data, format='audio/wav')
+
+                if st.button("Save Recorded Sample to Firebase", key="save_add_speaker_button") and person_name:
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{timestamp}.wav")
+                    cloud_filename = f"{person_name}/{person_name}_sample_{timestamp}.wav"
+
+                    with open(local_filename, "wb") as f:
+                        f.write(wav_audio_data)
+
+                    if upload_to_firebase(local_filename, cloud_filename):
+                        st.success(f"Sample for {person_name} uploaded successfully!")
+                        os.remove(local_filename)
+                        
+                        # Invalidate cache for training data so next training uses new data
+                        st.cache_data.clear() 
+                        st.cache_resource.clear() 
+                        st.warning("New data added! The model needs to be retrained for these changes to take effect. The app will now reload to retrain.")
+                        st.experimental_rerun() # Rerun the app to trigger retraining
+                    else:
+                        st.error("Failed to save sample. Check console for details.")
+                        if os.path.exists(local_filename):
+                            os.remove(local_filename)
+                elif st.button("Save Recorded Sample to Firebase", key="save_add_speaker_button_no_name"):
+                    st.warning("Please enter a person's name before saving the recording.")
+            except base64.binascii.Error as e:
+                st.error(f"❌ Error decoding audio data: {e}. The received data might be corrupted.")
+            except Exception as e:
+                st.error(f"An unexpected error occurred during audio processing: {e}")
 
 
     elif app_mode == "Recognize Speaker from File":
@@ -377,15 +499,14 @@ def main():
             st.warning("Model not trained or loaded. Please add new data (Option 1) and train the model first.")
             return
 
-        uploaded_file = st.file_uploader("Choose a WAV audio file", type=["wav"])
+        uploaded_file = st.file_uploader("Choose a WAV audio file", type=["wav"], key="file_uploader_recognize")
 
         if uploaded_file is not None:
             st.audio(uploaded_file, format='audio/wav')
             
-            # Read bytes directly from uploaded file
             audio_bytes = uploaded_file.read()
             
-            if st.button("Recognize Speaker"):
+            if st.button("Recognize Speaker", key="recognize_file_button"):
                 with st.spinner("Processing file..."):
                     predicted_speaker, confidence = recognize_speaker_from_audio_data(trained_model, id_to_label_map, audio_bytes)
                     if predicted_speaker != "Not Available":
@@ -402,39 +523,156 @@ def main():
             st.warning("Model not trained or loaded. Please add new data (Option 1) and train the model first.")
             return
 
-        # Use streamlit-audiorec for live recording
-        # Removed 'key' argument as per your request.
-        # This might lead to 'StreamlitAPIException: DuplicateWidgetID' if not managed carefully.
-        live_wav_audio_data = st_audiorec(
-            loop_duration=DEFAULT_DURATION,
-            start_text="Click to Start Live Recognition Recording",
-            stop_text="Click to Stop Live Recognition Recording",
-            return_data_type="bytes"
-        )
+        # --- Custom HTML/JS Recorder Component for Live Recognition ---
+        # This is a separate instance, so it needs its own key.
+        # The functionality is similar to the "Add New Speaker Data" recorder.
+        live_recorder_html = f"""
+        <style>
+            .recorder-container {{
+                border: 1px solid #ddd;
+                padding: 15px;
+                border-radius: 8px;
+                background-color: #f9f9f9;
+                text-align: center;
+            }}
+            .recorder-button {{
+                background-color: #4CAF50; /* Green */
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                margin: 5px;
+                transition: background-color 0.3s ease;
+            }}
+            .recorder-button:hover:not(:disabled) {{
+                background-color: #45a049;
+            }}
+            .recorder-button:disabled {{
+                background-color: #cccccc;
+                cursor: not-allowed;
+            }}
+            #stopButtonLive {{ /* Unique ID for live recorder stop button */
+                background-color: #f44336; /* Red */
+            }}
+            #stopButtonLive:hover:not(:disabled) {{
+                background-color: #da190b;
+            }}
+            #audioPlaybackLive {{ /* Unique ID for live recorder audio playback */
+                width: 90%;
+                margin-top: 15px;
+            }}
+            #statusLive {{ /* Unique ID for live recorder status */
+                margin-top: 10px;
+                font-weight: bold;
+                color: #333;
+            }}
+        </style>
+        <div class="recorder-container">
+            <button id="recordButtonLive" class="recorder-button">Start Live Recording</button>
+            <button id="stopButtonLive" class="recorder-button" disabled>Stop Live Recording</button>
+            <audio id="audioPlaybackLive" controls style="display:block;margin: 15px auto;"></audio>
+            <div id="statusLive">Status: Ready</div>
+        </div>
 
-        if live_wav_audio_data is not None:
-            if st.button("Analyze Live Recording"):
-                with st.spinner("Analyzing live recording..."):
-                    # Process the audio data directly from bytes
-                    predicted_speaker, confidence = recognize_speaker_from_audio_data(trained_model, id_to_label_map, live_wav_audio_data)
+        <script>
+            const recordButtonLive = document.getElementById('recordButtonLive');
+            const stopButtonLive = document.getElementById('stopButtonLive');
+            const audioPlaybackLive = document.getElementById('audioPlaybackLive');
+            const statusDivLive = document.getElementById('statusLive');
+            let mediaRecorderLive;
+            let audioChunksLive = [];
+            let streamLive;
+
+            const streamlit = window.Streamlit;
+
+            recordButtonLive.onclick = async () => {{
+                audioChunksLive = [];
+                try {{
+                    streamLive = await navigator.mediaDevices.getUserMedia({{ audio: true }});
+                    mediaRecorderLive = new MediaRecorder(streamLive);
                     
-                    if predicted_speaker != "Not Available":
-                        st.success(f"Predicted Speaker: **{predicted_speaker}** (Confidence: **{confidence:.2f}%**)")
-                        # Optionally upload live recording to Firebase, as previously
-                        # This part is commented out as it's not strictly necessary for recognition
-                        # but demonstrates cloud storage of live recordings if desired.
-                        # cloud_temp_blob_name = f"live_recordings/live_recording_{int(time.time())}.wav"
-                        # os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
-                        # local_temp_file = os.path.join(TEMP_RECORDINGS_DIR, f"live_recording_{int(time.time())}.wav")
-                        # with open(local_temp_file, "wb") as f:
-                        #     f.write(live_wav_audio_data)
-                        # upload_to_firebase(local_temp_file, cloud_temp_blob_name)
-                        # os.remove(local_temp_file)
-                    else:
-                        st.error("Could not recognize speaker.")
+                    mediaRecorderLive.ondataavailable = event => {{
+                        audioChunksLive.push(event.data);
+                    }};
+                    
+                    mediaRecorderLive.onstop = () => {{
+                        const audioBlobLive = new Blob(audioChunksLive, {{ type: 'audio/wav' }});
+                        const readerLive = new FileReader();
+                        readerLive.onloadend = () => {{
+                            const base64dataLive = readerLive.result;
+                            streamlit.setComponentValue(base64dataLive); // Send data back to Streamlit
+                            audioPlaybackLive.src = URL.createObjectURL(audioBlobLive);
+                            statusDivLive.innerText = "Status: Live recording stopped. Audio sent to Streamlit.";
+                            
+                            if (streamLive) {{
+                                streamLive.getTracks().forEach(track => track.stop());
+                            }}
+                        }};
+                        readerLive.readAsDataURL(audioBlobLive);
+                    }};
+                    
+                    mediaRecorderLive.start();
+                    statusDivLive.innerText = "Status: Recording... Speak now!";
+                    recordButtonLive.disabled = true;
+                    stopButtonLive.disabled = false;
+                    audioPlaybackLive.removeAttribute('src');
+                    
+                    setTimeout(() => {{
+                        if (mediaRecorderLive.state === 'recording') {{
+                            mediaRecorderLive.stop();
+                            statusDivLive.innerText = "Status: Live recording stopped automatically.";
+                            recordButtonLive.disabled = false;
+                            stopButtonLive.disabled = true;
+                        }}
+                    }}, {int(DEFAULT_DURATION * 1000)});
+                }} catch (err) {{
+                    statusDivLive.innerText = "Status: Microphone access denied or error: " + err.name + " - " + err.message;
+                    console.error('Microphone access error:', err);
+                }}
+            }};
+
+            stopButtonLive.onclick = () => {{
+                if (mediaRecorderLive && mediaRecorderLive.state === 'recording') {{
+                    mediaRecorderLive.stop();
+                    statusDivLive.innerText = "Status: Live recording stopped by user.";
+                    recordButtonLive.disabled = false;
+                    stopButtonLive.disabled = true;
+                }}
+            }};
+
+            setTimeout(() => {{
+                streamlit.setFrameHeight(document.documentElement.scrollHeight);
+            }}, 100);
+        </script>
+        """
+        live_recorded_audio_base64 = st.components.v1.html(live_recorder_html, height=250, scrolling=False, key="custom_live_recorder")
+
+        if live_recorded_audio_base64:
+            st.info("Live audio received! Click 'Analyze Live Recording' to recognize.")
+            if "," in live_recorded_audio_base64:
+                header, encoded_live = live_recorded_audio_base64.split(",", 1)
+            else:
+                encoded_live = live_recorded_audio_base64
+
+            try:
+                live_wav_audio_data = base64.b64decode(encoded_live)
+                st.audio(live_wav_audio_data, format='audio/wav')
+                
+                if st.button("Analyze Live Recording", key="analyze_live_button"):
+                    with st.spinner("Analyzing live recording..."):
+                        predicted_speaker, confidence = recognize_speaker_from_audio_data(trained_model, id_to_label_map, live_wav_audio_data)
+                        
+                        if predicted_speaker != "Not Available":
+                            st.success(f"Predicted Speaker: **{predicted_speaker}** (Confidence: **{confidence:.2f}%**)")
+                        else:
+                            st.error("Could not recognize speaker.")
+            except base64.binascii.Error as e:
+                st.error(f"❌ Error decoding live audio data: {e}. The received data might be corrupted.")
+            except Exception as e:
+                st.error(f"An unexpected error occurred during live audio processing: {e}")
 
 
 if __name__ == "__main__":
-    # Ensure temporary recordings directory exists at startup
-    os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
     main()
