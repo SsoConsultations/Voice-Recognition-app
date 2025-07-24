@@ -15,12 +15,6 @@ import tempfile # For robust temporary file handling
 import firebase_admin
 from firebase_admin import credentials, storage
 
-# Path to your Firebase service account key JSON file
-# IMPORTANT: Keep this file secure and outside your public code repositories!
-FIREBASE_SERVICE_ACCOUNT_KEY = 'path/to/your/firebase_service_account.json' # <--- UPDATE THIS PATH
-FIREBASE_STORAGE_BUCKET = 'your-project-id.appspot.com' # <--- UPDATE WITH YOUR BUCKET NAME
-FIREBASE_VOICES_PREFIX = 'voices/' # Prefix/folder inside your Firebase Storage bucket for voice data
-
 # Initialize Firebase Admin SDK
 firebase_enabled = False
 try:
@@ -43,7 +37,7 @@ LABELS_FILENAME = 'id_to_label_map.pkl'
 
 # Recording Specific
 DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person
-DEFAULT_DURATION = 3.0      # Duration of each recording in seconds (can be float)
+DEFAULT_DURATION = 4.0      # Duration of each recording in seconds (can be float)
 DEFAULT_SAMPLE_RATE = 44100 # Sample rate (samples per second). 44100 Hz is standard CD quality.
 
 # Feature Extraction Specific
