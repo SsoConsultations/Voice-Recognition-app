@@ -1,0 +1,8 @@
+streamlit
+numpy
+scikit-learn
+scipy
+librosa
+firebase-admin
+pydub 
+soundfile 
