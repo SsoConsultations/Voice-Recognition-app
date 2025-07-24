@@ -1,8 +1,7 @@
 streamlit
+streamlit-audiorec
+firebase-admin
 numpy
-scikit-learn
 scipy
 librosa
-firebase-admin
-pydub 
-soundfile 
+scikit-learn
