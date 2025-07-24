@@ -331,7 +331,7 @@ def main():
         # Use streamlit-audiorec for recording
         # The key is important if you have multiple st_audiorec instances
         wav_audio_data = st_audiorec(
-            key="add_speaker_recorder",
+            key = "add_speaker_recorder",
             loop_duration=DEFAULT_DURATION,
             start_text="Click to Start Recording",
             stop_text="Click to Stop Recording",
