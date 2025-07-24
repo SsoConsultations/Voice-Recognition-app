@@ -43,26 +43,23 @@ N_MFCC = 13 # Number of MFCCs to extract
 def initialize_firebase_app():
     if not firebase_admin._apps: # Check if Firebase app is already initialized
         try:
-            # Try to load from Streamlit secrets first (for cloud deployment)
-            firebase_config_dict = st.secrets["firebase"]["service_account"]
+            # Access the JSON string from secrets
+            firebase_service_account_json_str = st.secrets["firebase"]["service_account_json"]
             firebase_storage_bucket = st.secrets["firebase"]["storage_bucket"]
 
-            # Streamlit Cloud environment: write the service account config to a temporary file
-            # as firebase_admin.credentials.Certificate expects a file path.
-            temp_service_account_path = os.path.join(TEMP_RECORDINGS_DIR, "firebase_service_account.json")
-            os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True) # Ensure temp dir exists
-            with open(temp_service_account_path, "w") as f:
-                json.dump(firebase_config_dict, f)
+            # Parse the JSON string into a dictionary
+            firebase_config_dict = json.loads(firebase_service_account_json_str)
             
-            cred = credentials.Certificate(temp_service_account_path)
+            # Use from_service_account_info to initialize with a dictionary
+            cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
             st.success("✅ Firebase initialized successfully from secrets.")
             return True
-        except (KeyError, FileNotFoundError, Exception) as e:
+        except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
             st.warning(f"Firebase secrets not found or error during initialization: {e}. Attempting to load from local 'firebase_service_account.json'.")
             local_service_account_path = 'firebase_service_account.json'
-            local_storage_bucket = 'your-project-id.appspot.com' # REMEMBER TO REPLACE THIS FOR LOCAL TESTING
+            local_storage_bucket = 'face-recogniser-app.appspot.com' # REMEMBER TO REPLACE THIS FOR LOCAL TESTING
 
             if os.path.exists(local_service_account_path):
                 try:
@@ -195,9 +192,6 @@ def load_data_from_firebase(data_prefix="data"):
             processed_count += 1
             progress_bar.progress(processed_count / total_audio_files, text=f"Processed {processed_count}/{total_audio_files} files...")
 
-        if not speaker_has_audio:
-            st.info(f"No valid .wav files found or downloaded for {speaker_name}. This speaker will be skipped for training.")
-    
     progress_bar.empty() # Hide progress bar after completion
     return np.array(X), np.array(y), labels_map, id_to_label
 
@@ -469,3 +463,4 @@ elif app_mode == "Recognize Speaker Live":
             st.write("Analyzing live recording...")
             recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
             st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
+            
