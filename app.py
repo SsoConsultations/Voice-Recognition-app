@@ -9,7 +9,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 import pickle
 import time
-from io import BytesIO # To handle audio data in memory
+from io import BytesIO
+import json # Import json to parse the service account key
 
 # Streamlit custom component for audio recording
 from st_audiorec import st_audiorec
@@ -19,8 +20,6 @@ import firebase_admin
 from firebase_admin import credentials, storage
 
 # --- Configuration Constants ---
-# General
-# DATA_BASE_DIR is less relevant as data moves to cloud. We'll use TEMP_RECORDINGS_DIR for any local needs.
 MODEL_FILENAME = 'speaker_recognition_model.pkl'
 LABELS_FILENAME = 'id_to_label_map.pkl'
 TEMP_RECORDINGS_DIR = "temp_recordings" # For temporary local storage during processing
@@ -43,23 +42,24 @@ def initialize_firebase():
             # Load credentials from Streamlit secrets
             # The service account key JSON should be stored as a single string
             # in your Streamlit secrets.toml file under a key like 'firebase_service_account_key'
-            # Example:
-            # [secrets]
-            # firebase_service_account_key = "{ \"type\": \"service_account\", \"project_id\": \"your-project-id\", ... }"
-            
             # The bucket name should also be in secrets
-            # Example:
-            # firebase_storage_bucket = "your-project-id.appspot.com"
-
-            cred_json = st.secrets["firebase_service_account_key"]
+            
+            cred_json_str = st.secrets["firebase_service_account_key"]
             bucket_name = st.secrets["firebase_storage_bucket"]
 
-            cred = credentials.Certificate(st.secrets["firebase_service_account_key"])
+            # Parse the JSON string into a Python dictionary
+            cred_dict = json.loads(cred_json_str)
+
+            # Pass the dictionary directly to credentials.Certificate
+            cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
             st.success("✅ Firebase initialized successfully.")
             return True
         except KeyError as e:
             st.error(f"❌ Firebase secret not found: {e}. Please ensure 'firebase_service_account_key' and 'firebase_storage_bucket' are set in your Streamlit secrets.toml.")
+            return False
+        except json.JSONDecodeError as e:
+            st.error(f"❌ Error decoding Firebase service account key JSON: {e}. Please check the format in secrets.toml.")
             return False
         except Exception as e:
             st.error(f"❌ Error initializing Firebase: {e}")
@@ -71,9 +71,6 @@ def initialize_firebase():
 
 
 # --- Firebase Storage Functions ---
-
-# These functions remain largely the same, but will interact with the Firebase SDK
-# initialized via Streamlit secrets.
 
 def upload_to_firebase(local_file_path, destination_blob_name):
     """Uploads a file to Firebase Cloud Storage."""
@@ -111,8 +108,6 @@ def list_firebase_files(prefix=""):
 
 # --- Utility Functions (modified for Streamlit & Firebase) ---
 
-# @st.cache_data is important for caching feature extraction results if possible,
-# though it might be tricky with dynamically downloaded files.
 @st.cache_data(show_spinner=False) # Don't show spinner if it's too fast, manage manually
 def extract_features(file_path, n_mfcc=N_MFCC):
     """
@@ -186,7 +181,8 @@ def load_data_from_firebase():
                     st.warning(f"Skipping {blob_name} due to download error.")
                 
                 files_processed_count += 1
-                progress_bar.progress(files_processed_count / total_files_to_process)
+                if total_files_to_process > 0:
+                    progress_bar.progress(files_processed_count / total_files_to_process)
 
         if not speaker_has_audio:
             st.warning(f"   No valid .wav files found or downloaded for {speaker_name}. This speaker will be skipped for training.")
@@ -222,6 +218,11 @@ def train_and_save_model():
             
     st.write(f"\nTotal samples loaded: {len(X)}")
     st.write(f"Speakers found: {labels_map}")
+
+    # Ensure enough samples for splitting
+    if len(X) < 2:
+        st.warning("Not enough total samples to split into training and testing sets. Need at least 2 samples.")
+        return None, None
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     
@@ -279,7 +280,7 @@ def recognize_speaker_from_audio_data(model, id_to_label, audio_bytes):
     """
     if model is None or id_to_label is None:
         st.error("Error: Model not loaded. Please add new data (Option 1) to train the model.")
-        return "Not Available"
+        return "Not Available", 0.0
 
     os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
     temp_file = os.path.join(TEMP_RECORDINGS_DIR, f"temp_recognition_{int(time.time())}.wav")
@@ -290,7 +291,7 @@ def recognize_speaker_from_audio_data(model, id_to_label, audio_bytes):
     features = extract_features(temp_file)
     if features is None:
         os.remove(temp_file)
-        return "Unknown Speaker (Feature Extraction Failed)"
+        return "Unknown Speaker (Feature Extraction Failed)", 0.0
 
     features = features.reshape(1, -1) # Reshape for prediction
 
@@ -352,12 +353,8 @@ def main():
                 # Invalidate cache for training data so next training uses new data
                 st.cache_data.clear() 
                 st.cache_resource.clear() # Clear model cache too so it retrains
-                st.warning("New data added! The model needs to be retrained for these changes to take effect. Please restart the app or click 'Train Model' if manually implemented.")
-                
-                # Auto-retrain, but make it explicit to the user
-                with st.spinner("Retraining model with new data..."):
-                    st.session_state['trained_model'], st.session_state['id_to_label_map'] = train_and_save_model()
-                    st.success("Model retrained successfully with new data!")
+                st.warning("New data added! The model needs to be retrained for these changes to take effect. The app will now reload to retrain.")
+                st.experimental_rerun() # Rerun the app to trigger retraining
             else:
                 st.error("Failed to save sample. Check console for details.")
                 if os.path.exists(local_filename):
@@ -417,6 +414,8 @@ def main():
                     if predicted_speaker != "Not Available":
                         st.success(f"Predicted Speaker: **{predicted_speaker}** (Confidence: **{confidence:.2f}%**)")
                         # Optionally upload live recording to Firebase, as previously
+                        # This part is commented out as it's not strictly necessary for recognition
+                        # but demonstrates cloud storage of live recordings if desired.
                         # cloud_temp_blob_name = f"live_recordings/live_recording_{int(time.time())}.wav"
                         # os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
                         # local_temp_file = os.path.join(TEMP_RECORDINGS_DIR, f"live_recording_{int(time.time())}.wav")
