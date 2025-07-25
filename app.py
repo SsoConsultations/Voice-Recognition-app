@@ -54,7 +54,7 @@ def initialize_firebase_app():
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
-            st.success("✅ Firebase initialized successfully from secrets.")
+            # st.success("✅ Firebase initialized successfully from secrets.") # Comment out or remove this line
             return True
         except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
@@ -66,7 +66,7 @@ def initialize_firebase_app():
                 try:
                     cred = credentials.Certificate(local_service_account_path)
                     firebase_admin.initialize_app(cred, {'storageBucket': local_storage_bucket})
-                    st.success("✅ Firebase initialized successfully from local file.")
+                    # st.success("✅ Firebase initialized successfully from local file.") # Comment out or remove this line
                     return True
                 except Exception as e_local:
                     st.error(f"❌ Error initializing Firebase from local file: {e_local}. Please ensure your 'firebase_service_account.json' is correct.")
@@ -273,7 +273,7 @@ def load_trained_model():
         labels_downloaded = download_audio_from_firebase(LABELS_FILENAME, temp_labels_path)
 
         if not model_downloaded or not labels_downloaded:
-            st.warning("No existing model or labels found in Firebase Storage. Please add new data to train the model.")
+            # st.warning("No existing model or labels found in Firebase Storage. Please add new data to train the model.") # Comment out or remove this line
             # Ensure cleanup if only one part downloaded
             if os.path.exists(temp_model_path): os.remove(temp_model_path)
             if os.path.exists(temp_labels_path): os.remove(temp_labels_path)
@@ -283,7 +283,7 @@ def load_trained_model():
             model = pickle.load(f)
         with open(temp_labels_path, 'rb') as f:
             id_to_label = pickle.load(f)
-        st.success("✅ Model and labels loaded successfully from Firebase.")
+        # st.success("✅ Model and labels loaded successfully from Firebase.") # Comment out or remove this line
         
         # Clean up temporary downloaded files
         os.remove(temp_model_path)
