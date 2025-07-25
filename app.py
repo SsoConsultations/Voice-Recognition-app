@@ -54,7 +54,7 @@ def initialize_firebase_app():
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
-            # Removed: st.success("✅ Firebase initialized successfully from secrets.")
+            # st.success("✅ Firebase initialized successfully from secrets.") # Removed this line
             return True
         except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
@@ -66,7 +66,7 @@ def initialize_firebase_app():
                 try:
                     cred = credentials.Certificate(local_service_account_path)
                     firebase_admin.initialize_app(cred, {'storageBucket': local_storage_bucket})
-                    # Removed: st.success("✅ Firebase initialized successfully from local file.")
+                    # st.success("✅ Firebase initialized successfully from local file.") # Removed this line
                     return True
                 except Exception as e_local:
                     st.error(f"❌ Error initializing Firebase from local file: {e_local}. Please ensure your 'firebase_service_account.json' is correct.")
@@ -333,7 +333,15 @@ if 'logged_in_as' not in st.session_state:
 # Load model at the start (cached) - this will happen only once unless caches are cleared
 trained_model, id_to_label_map = load_trained_model()
 
-# --- Logout Function ---
+# --- Callback Functions for Login/Logout ---
+def set_user_login():
+    st.session_state.logged_in_as = 'user'
+    st.rerun() # Explicit rerun after state change for immediate effect
+
+def set_admin_login():
+    st.session_state.logged_in_as = 'admin'
+    st.rerun() # Explicit rerun after state change for immediate effect
+
 def logout():
     """Resets the login state and clears relevant session variables."""
     st.session_state.logged_in_as = None
@@ -341,7 +349,7 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
-    # No st.rerun() here either, as the change to session state will trigger it.
+    st.rerun() # Rerun to go back to login page
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
@@ -404,13 +412,9 @@ if st.session_state.logged_in_as is None:
     col1, col2 = st.columns([1, 1]) # Create two columns for buttons
 
     with col1:
-        if st.button("Login as User", key="login_user"):
-            st.session_state.logged_in_as = 'user'
-            # Removed: st.rerun() 
+        st.button("Login as User", key="login_user", on_click=set_user_login)
     with col2:
-        if st.button("Login as Admin", key="login_admin"):
-            st.session_state.logged_in_as = 'admin'
-            # Removed: st.rerun()
+        st.button("Login as Admin", key="login_admin", on_click=set_admin_login)
             
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
