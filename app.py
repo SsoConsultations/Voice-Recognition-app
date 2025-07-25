@@ -353,13 +353,19 @@ if st.session_state.logged_in_as is None:
     st.markdown(
         """
         <style>
+        /* This style block will affect the entire app, consider ID'ing elements if you need more specificity */
+        html, body, [data-testid="stAppViewContainer"] {
+            height: 100vh; /* Make the main app container take full viewport height */
+            overflow: hidden; /* Prevent scrolling on the main container */
+        }
         .centered-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 80vh; /* Adjust height as needed */
+            height: 100%; /* Make this container take full height of its parent (stAppViewContainer) */
             text-align: center;
+            padding-bottom: 20px; /* Add some padding at the bottom if needed */
         }
         .login-buttons {
             display: flex;
@@ -391,9 +397,11 @@ if st.session_state.logged_in_as is None:
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
     # --- HERE IS THE CHANGE FOR THE LOGO ---
+    # Ensure 'sso_logo.png' is in the same directory as your app.py file
     st.image("sso_logo.png", width=150) 
     
-    st.markdown("## SSO Consultants Face Recogniser") # Title based on image
+    # --- HERE IS THE CHANGE FOR THE TITLE ---
+    st.markdown("## SSO Consultants Voice Recognition Model") 
     st.write("Please choose your login type.")
 
     col1, col2 = st.columns([1, 1]) # Create two columns for buttons
@@ -407,7 +415,7 @@ if st.session_state.logged_in_as is None:
             st.session_state.logged_in_as = 'admin'
             st.rerun()
             
-    st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Face Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
+    st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- User Section ---
@@ -524,6 +532,9 @@ elif st.session_state.logged_in_as == 'admin':
                         train_and_save_model.clear()
                         load_trained_model.clear()
 
+                        # Declare global *before* reassignment within this scope
+                        global trained_model, id_to_label_map 
+
                         # Retrain the model with the new data
                         trained_model, id_to_label_map = train_and_save_model()
                         
@@ -551,6 +562,9 @@ elif st.session_state.logged_in_as == 'admin':
             load_data_from_firebase.clear() # Clear data cache to ensure fresh load
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
+            
+            # Declare global *before* reassignment within this scope
+            global trained_model, id_to_label_map
             
             trained_model, id_to_label_map = train_and_save_model()
             
