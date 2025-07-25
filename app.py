@@ -371,8 +371,8 @@ elif app_mode == "Add New Speaker Data":
             st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
             st.info(f"Click the 'Start Recording' button below and speak for {DEFAULT_DURATION} seconds.")
             
-            # Use st_audiorec for recording
-            wav_audio_data = st_audiorec(key=f"audio_rec_{st.session_state.recorded_samples_count}")
+            # Removed the 'key' argument here
+            wav_audio_data = st_audiorec() 
 
             if wav_audio_data is not None:
                 st.audio(wav_audio_data, format='audio/wav')
@@ -451,8 +451,8 @@ elif app_mode == "Recognize Speaker Live":
     else:
         st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
         
-        # Use st_audiorec for live recording
-        wav_audio_data = st_audiorec(key="live_audio_rec")
+        # Removed the 'key' argument here
+        wav_audio_data = st_audiorec() 
         
         if wav_audio_data is not None:
             st.audio(wav_audio_data, format='audio/wav')
@@ -463,4 +463,3 @@ elif app_mode == "Recognize Speaker Live":
             st.write("Analyzing live recording...")
             recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
             st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
-            
