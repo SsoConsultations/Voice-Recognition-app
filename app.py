@@ -331,6 +331,7 @@ if 'logged_in_as' not in st.session_state:
     st.session_state.logged_in_as = None
 
 # Load model at the start (cached) - this will happen only once unless caches are cleared
+# These are top-level variables, no 'global' needed for their initial assignment here.
 trained_model, id_to_label_map = load_trained_model()
 
 # --- Logout Function ---
@@ -396,11 +397,10 @@ if st.session_state.logged_in_as is None:
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
-    # --- HERE IS THE CHANGE FOR THE LOGO ---
     # Ensure 'sso_logo.png' is in the same directory as your app.py file
     st.image("sso_logo.png", width=150) 
     
-    # --- HERE IS THE CHANGE FOR THE TITLE ---
+    # Changed title here
     st.markdown("## SSO Consultants Voice Recognition Model") 
     st.write("Please choose your login type.")
 
@@ -531,13 +531,9 @@ elif st.session_state.logged_in_as == 'admin':
                         load_data_from_firebase.clear()
                         train_and_save_model.clear()
                         load_trained_model.clear()
-
-                        # Declare global *before* reassignment within this scope
-                        global trained_model, id_to_label_map 
-
-                        # Retrain the model with the new data
-                        trained_model, id_to_label_map = train_and_save_model()
                         
+                        # After clearing caches and uploading, trigger a rerun.
+                        # The top-level load_trained_model() will then re-execute and reload the new model.
                         st.session_state.recorded_samples_count = 0 # Reset for next session
                         st.session_state.temp_audio_files = []
                         st.session_state.current_sample_processed = False # Reset for next session
@@ -563,12 +559,6 @@ elif st.session_state.logged_in_as == 'admin':
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
             
-            # Declare global *before* reassignment within this scope
-            global trained_model, id_to_label_map
-            
-            trained_model, id_to_label_map = train_and_save_model()
-            
-            if trained_model:
-                st.success("Model retraining initiated and completed successfully!")
-            else:
-                st.error("Model retraining failed. Check logs for details.")
+            # After clearing caches, trigger a rerun.
+            # The top-level load_trained_model() will then re-execute and reload the new model.
+            st.rerun()
