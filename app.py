@@ -29,8 +29,8 @@ LABELS_FILENAME = 'id_to_label_map.pkl'
 TEMP_RECORDINGS_DIR = "temp_recordings" # For local temporary storage before/after Firebase interaction
 
 # Recording Specific
-DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person (increased to 5)
-DEFAULT_DURATION = 5.0      # Duration of each recording in seconds (increased to 5.0)
+DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person
+DEFAULT_DURATION = 5.0      # Duration of each recording in seconds
 DEFAULT_SAMPLE_RATE = 44100 # Sample rate (samples per second). 44100 Hz is standard CD quality.
 
 # Feature Extraction Specific
@@ -477,3 +477,4 @@ elif app_mode == "Recognize Speaker Live":
             st.write("Analyzing live recording...")
             recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
             st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
+
