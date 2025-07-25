@@ -524,9 +524,6 @@ elif st.session_state.logged_in_as == 'admin':
                         train_and_save_model.clear()
                         load_trained_model.clear()
 
-                        # Declare global *before* reassignment within this scope
-                        global trained_model, id_to_label_map 
-
                         # Retrain the model with the new data
                         trained_model, id_to_label_map = train_and_save_model()
                         
@@ -554,9 +551,6 @@ elif st.session_state.logged_in_as == 'admin':
             load_data_from_firebase.clear() # Clear data cache to ensure fresh load
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
-            
-            # Declare global *before* reassignment within this scope
-            global trained_model, id_to_label_map
             
             trained_model, id_to_label_map = train_and_save_model()
             
