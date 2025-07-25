@@ -29,8 +29,8 @@ LABELS_FILENAME = 'id_to_label_map.pkl'
 TEMP_RECORDINGS_DIR = "temp_recordings" # For local temporary storage before/after Firebase interaction
 
 # Recording Specific
-DEFAULT_NUM_SAMPLES = 3     # Number of audio samples to record for each person (reduced for demo)
-DEFAULT_DURATION = 3.0      # Duration of each recording in seconds (can be float)
+DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person (increased to 5)
+DEFAULT_DURATION = 5.0      # Duration of each recording in seconds (increased to 5.0)
 DEFAULT_SAMPLE_RATE = 44100 # Sample rate (samples per second). 44100 Hz is standard CD quality.
 
 # Feature Extraction Specific
