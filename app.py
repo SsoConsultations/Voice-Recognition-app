@@ -41,6 +41,7 @@ N_MFCC = 13 # Number of MFCCs to extract
 # For local testing, ensure 'firebase_service_account.json' is in your project root.
 @st.cache_resource(show_spinner=False) # Cache the Firebase app initialization
 def initialize_firebase_app():
+    """Initializes the Firebase Admin SDK, trying Streamlit secrets first, then a local file."""
     if not firebase_admin._apps: # Check if Firebase app is already initialized
         try:
             # Access the JSON string from secrets
@@ -304,7 +305,7 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
 
     with st.spinner("Extracting features and predicting..."):
         # Reset buffer position to the beginning before passing to librosa
-        audio_source_buffer.seek(0)
+        audio_source_buffer.seek(0) 
         features = extract_features(audio_source_buffer)
 
     if features is None:
@@ -334,6 +335,7 @@ trained_model, id_to_label_map = load_trained_model()
 
 # --- Logout Function ---
 def logout():
+    """Resets the login state and clears relevant session variables."""
     st.session_state.logged_in_as = None
     # Optionally clear relevant session states for recording/recognition if needed
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
@@ -347,6 +349,7 @@ if st.session_state.logged_in_as:
 
 # --- Login Page ---
 if st.session_state.logged_in_as is None:
+    # Custom CSS for centering and button styling
     st.markdown(
         """
         <style>
@@ -387,12 +390,10 @@ if st.session_state.logged_in_as is None:
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
-    # Placeholder for your logo (replace with actual image path or URL if you have one)
-    # For now, using a direct image URL from the screenshot.
-    # If you have the image locally, use st.image("path/to/your/logo.png", width=150)
-    st.image("sso_logo.png", width=150) # Assuming the uploaded image URL works
+    # --- HERE IS THE CHANGE FOR THE LOGO ---
+    st.image("sso_logo.png", width=150) 
     
-    st.markdown("## SSO Consultants Face Recogniser") # Changed to Face Recogniser based on image
+    st.markdown("## SSO Consultants Face Recogniser") # Title based on image
     st.write("Please choose your login type.")
 
     col1, col2 = st.columns([1, 1]) # Create two columns for buttons
@@ -523,10 +524,12 @@ elif st.session_state.logged_in_as == 'admin':
                         train_and_save_model.clear()
                         load_trained_model.clear()
 
+                        # Declare global *before* reassignment within this scope
+                        global trained_model, id_to_label_map 
+
                         # Retrain the model with the new data
-                        # Note: trained_model and id_to_label_map are global/cached, so this update should propagate
-                        global trained_model, id_to_label_map
                         trained_model, id_to_label_map = train_and_save_model()
+                        
                         st.session_state.recorded_samples_count = 0 # Reset for next session
                         st.session_state.temp_audio_files = []
                         st.session_state.current_sample_processed = False # Reset for next session
@@ -552,7 +555,9 @@ elif st.session_state.logged_in_as == 'admin':
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
             
+            # Declare global *before* reassignment within this scope
             global trained_model, id_to_label_map
+            
             trained_model, id_to_label_map = train_and_save_model()
             
             if trained_model:
