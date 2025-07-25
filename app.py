@@ -361,36 +361,45 @@ elif app_mode == "Add New Speaker Data":
 
     if person_name:
         st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
-        st.markdown(f"**Instructions:** Click 'Start Recording' below, speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop Recording'** to finalize the sample.")
+        st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
 
         if 'recorded_samples_count' not in st.session_state:
             st.session_state.recorded_samples_count = 0
             st.session_state.temp_audio_files = [] # Store paths of locally saved temp files
+            st.session_state.current_sample_processed = False # New state for managing flow
 
         if st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
             st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
             
-            # Use st_audiorec for recording
-            wav_audio_data = st_audiorec() 
+            # Only show the recorder if the current sample hasn't been processed yet
+            if not st.session_state.current_sample_processed:
+                wav_audio_data = st_audiorec() 
 
-            if wav_audio_data is not None:
-                st.audio(wav_audio_data, format='audio/wav')
-                
-                # Save the recorded audio bytes to a temporary local file
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.recorded_samples_count + 1}_{timestamp}.wav")
-                
-                with open(local_filename, "wb") as f:
-                    f.write(wav_audio_data)
-                
-                st.session_state.temp_audio_files.append(local_filename)
-                st.session_state.recorded_samples_count += 1
-                st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
-                
-                # Add a brief pause before rerunning to allow user to see success message
-                time.sleep(1) 
-                st.rerun() 
-        else:
+                if wav_audio_data is not None:
+                    st.audio(wav_audio_data, format='audio/wav')
+                    
+                    # Process the recorded audio
+                    with st.spinner("Processing recorded sample..."):
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.recorded_samples_count + 1}_{timestamp}.wav")
+                        
+                        with open(local_filename, "wb") as f:
+                            f.write(wav_audio_data)
+                        
+                        st.session_state.temp_audio_files.append(local_filename)
+                        st.session_state.recorded_samples_count += 1
+                        st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
+                        st.session_state.current_sample_processed = True # Mark as processed
+                        st.rerun() # Rerun to show the 'Next Sample' button
+            else:
+                # If sample processed, show "Next Sample" button
+                if st.button(f"Next Sample ({st.session_state.recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)"):
+                    st.session_state.current_sample_processed = False # Reset for next recording
+                    st.rerun() # Rerun to display the recorder for the next sample
+                else:
+                    st.info(f"Sample {st.session_state.recorded_samples_count} collected. Click 'Next Sample' to continue.")
+
+        else: # All samples collected
             st.success(f"All {DEFAULT_NUM_SAMPLES} samples recorded for {person_name}!")
             
             if st.button("Upload Samples and Train Model"):
@@ -413,6 +422,7 @@ elif app_mode == "Add New Speaker Data":
                     trained_model, id_to_label_map = train_and_save_model()
                     st.session_state.recorded_samples_count = 0 # Reset for next session
                     st.session_state.temp_audio_files = []
+                    st.session_state.current_sample_processed = False # Reset for next session
                     st.rerun() 
             else:
                 st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
@@ -423,6 +433,8 @@ elif app_mode == "Add New Speaker Data":
             del st.session_state.recorded_samples_count
         if 'temp_audio_files' in st.session_state:
             del st.session_state.temp_audio_files
+        if 'current_sample_processed' in st.session_state:
+            del st.session_state.current_sample_processed
 
 
 # --- Recognize Speaker from File ---
