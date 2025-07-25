@@ -387,7 +387,7 @@ elif app_mode == "Add New Speaker Data":
                 st.session_state.temp_audio_files.append(local_filename)
                 st.session_state.recorded_samples_count += 1
                 st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
-                st.experimental_rerun() # Rerun to show next recording prompt
+                st.rerun() # Changed from st.experimental_rerun()
         else:
             st.success(f"All {DEFAULT_NUM_SAMPLES} samples recorded for {person_name}!")
             
@@ -411,7 +411,7 @@ elif app_mode == "Add New Speaker Data":
                     trained_model, id_to_label_map = train_and_save_model()
                     st.session_state.recorded_samples_count = 0 # Reset for next session
                     st.session_state.temp_audio_files = []
-                    st.experimental_rerun() # Rerun to update model status
+                    st.rerun() # Changed from st.experimental_rerun()
             else:
                 st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
     else:
