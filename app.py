@@ -361,7 +361,7 @@ elif app_mode == "Add New Speaker Data":
 
     if person_name:
         st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
-        st.write("Please speak clearly for each sample in a quiet environment when prompted.")
+        st.markdown(f"**Instructions:** Click 'Start Recording' below, speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop Recording'** to finalize the sample.")
 
         if 'recorded_samples_count' not in st.session_state:
             st.session_state.recorded_samples_count = 0
@@ -369,9 +369,8 @@ elif app_mode == "Add New Speaker Data":
 
         if st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
             st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
-            st.info(f"Click the 'Start Recording' button below and speak for {DEFAULT_DURATION} seconds.")
             
-            # Removed the 'key' argument here
+            # Use st_audiorec for recording
             wav_audio_data = st_audiorec() 
 
             if wav_audio_data is not None:
@@ -387,7 +386,10 @@ elif app_mode == "Add New Speaker Data":
                 st.session_state.temp_audio_files.append(local_filename)
                 st.session_state.recorded_samples_count += 1
                 st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
-                st.rerun() # Changed from st.experimental_rerun()
+                
+                # Add a brief pause before rerunning to allow user to see success message
+                time.sleep(1) 
+                st.rerun() 
         else:
             st.success(f"All {DEFAULT_NUM_SAMPLES} samples recorded for {person_name}!")
             
@@ -411,7 +413,7 @@ elif app_mode == "Add New Speaker Data":
                     trained_model, id_to_label_map = train_and_save_model()
                     st.session_state.recorded_samples_count = 0 # Reset for next session
                     st.session_state.temp_audio_files = []
-                    st.rerun() # Changed from st.experimental_rerun()
+                    st.rerun() 
             else:
                 st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
     else:
