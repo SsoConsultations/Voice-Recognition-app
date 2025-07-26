@@ -355,9 +355,11 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
+    st.rerun() # Rerun to go back to login page after logout
 
 def set_login_mode(mode):
     st.session_state.login_mode = mode
+    st.rerun() # Rerun to display the login form
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
@@ -431,11 +433,10 @@ if st.session_state.logged_in_as is None:
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
-    st.image("sso_logo.png", width=150) 
-    
-    st.markdown("## SSO Consultants Voice Recognizer") 
-    
-    if st.session_state.login_mode is None: # Initial screen: choose role
+    # Conditionally display logo and main title
+    if st.session_state.login_mode is None:
+        st.image("sso_logo.png", width=150) 
+        st.markdown("## SSO Consultants Voice Recognizer") 
         st.write("Please choose your login type to proceed.")
         col1, col2 = st.columns([1, 1])
         with col1:
