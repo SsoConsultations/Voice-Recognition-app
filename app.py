@@ -480,7 +480,6 @@ if st.session_state.logged_in_as is None:
         
     elif st.session_state.login_mode in ['user_login', 'admin_login']: # Specific login form
         role = "User" if st.session_state.login_mode == 'user_login' else "Admin"
-        st.write(f"Please log in as **{role}**.")
 
         with st.container(border=True): # Use a container with a border for visual grouping
             st.markdown(f"<h3 style='text-align: center;'>{role} Login</h3>", unsafe_allow_html=True)
@@ -504,7 +503,7 @@ if st.session_state.logged_in_as is None:
                         st.error("Invalid username or password for Admin access.")
             
             # Back button to return to role selection
-            st.button("← Back to Role Selection", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
+            st.button("Back to home page", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
 
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
