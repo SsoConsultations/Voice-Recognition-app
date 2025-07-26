@@ -660,7 +660,6 @@ elif st.session_state.logged_in_as == 'admin':
 
         st.markdown("---")
         st.subheader("Voice Samples for Recognition")
-        st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{st.session_state.get('person_name_input_combined', '[Enter Name Above]')}**, each {DEFAULT_DURATION} seconds long.")
         st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
 
         # --- Voice Recording Section ---
