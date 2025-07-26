@@ -471,7 +471,7 @@ elif st.session_state.logged_in_as == 'admin':
         st.header("➕ Add/Record New Speaker Voice Data")
         st.write("Record multiple voice samples for a person to train the recognition model. Each sample will be uploaded to Firebase Storage.")
 
-        person_name = st.text_input("Enter the name of the person to record:", key="admin_person_name_input").strip()
+        person_name = st.text_input("Enter the name of the person and click enter to record:", key="admin_person_name_input").strip()
 
         if person_name:
             st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
