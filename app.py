@@ -355,11 +355,9 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
-    st.rerun() # Rerun to go back to login page after logout
 
 def set_login_mode(mode):
     st.session_state.login_mode = mode
-    st.rerun() # Rerun to display the login form
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
@@ -469,7 +467,7 @@ if st.session_state.logged_in_as is None:
                         st.error("Invalid username or password for Admin access.")
             
             # Back button to return to role selection
-            st.button("← Back to Role Selection", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
+            st.button("Back to home page", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
 
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
