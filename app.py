@@ -104,11 +104,6 @@ os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
 if not initialize_firebase_app():
     st.stop() # Stop the app if Firebase cannot be initialized
 
-# Get Firebase services from session state (only if initialization was successful)
-firebase_app = st.session_state.firebase_app
-firebase_db = st.session_state.firebase_db
-firebase_auth = st.session_state.firebase_auth
-
 # --- Authentication State Management ---
 if 'auth_ready' not in st.session_state:
     st.session_state.auth_ready = False
