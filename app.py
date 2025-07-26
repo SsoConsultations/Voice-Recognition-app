@@ -15,6 +15,7 @@ import json # For handling Firebase service account JSON
 # Firebase imports
 import firebase_admin
 from firebase_admin import credentials, storage
+from firebase_admin import db # Import Firebase Realtime Database
 
 # Attempt to import the custom Streamlit audio recorder component
 try:
@@ -47,26 +48,32 @@ def initialize_firebase_app():
             # Access the JSON string from secrets
             firebase_service_account_json_str = st.secrets["firebase"]["service_account_json"]
             firebase_storage_bucket = st.secrets["firebase"]["storage_bucket"]
-
+            firebase_database_url = st.secrets["firebase"]["database_url"] # New: Database URL
+            
             # Parse the JSON string into a dictionary
             firebase_config_dict = json.loads(firebase_service_account_json_str)
             
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
-            firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
-            # st.success("✅ Firebase initialized successfully from secrets.") # Removed this line
+            firebase_admin.initialize_app(cred, {
+                'storageBucket': firebase_storage_bucket,
+                'databaseURL': firebase_database_url # New: Pass database URL
+            })
             return True
         except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
             st.warning(f"Firebase secrets not found or error during initialization: {e}. Attempting to load from local 'firebase_service_account.json'.")
             local_service_account_path = 'firebase_service_account.json'
             local_storage_bucket = 'face-recogniser-app.appspot.com' # REMEMBER TO REPLACE THIS FOR LOCAL TESTING
+            local_database_url = 'https://face-recogniser-app-default-rtdb.firebaseio.com/' # REMEMBER TO REPLACE THIS FOR LOCAL TESTING
 
             if os.path.exists(local_service_account_path):
                 try:
                     cred = credentials.Certificate(local_service_account_path)
-                    firebase_admin.initialize_app(cred, {'storageBucket': local_storage_bucket})
-                    # st.success("✅ Firebase initialized successfully from local file.") # Removed this line
+                    firebase_admin.initialize_app(cred, {
+                        'storageBucket': local_storage_bucket,
+                        'databaseURL': local_database_url
+                    })
                     return True
                 except Exception as e_local:
                     st.error(f"❌ Error initializing Firebase from local file: {e_local}. Please ensure your 'firebase_service_account.json' is correct.")
@@ -113,6 +120,31 @@ def list_files_in_firebase_storage(prefix=""):
     bucket = storage.bucket()
     blobs = bucket.list_blobs(prefix=prefix)
     return [blob.name for blob in blobs]
+
+# --- Firebase Realtime Database Utility Functions ---
+
+def add_person_data_to_firebase_db(person_name, age, height, industry, total_films, hit_films):
+    """Adds person (actor/actress) data to Firebase Realtime Database."""
+    # Using person_name as the key for simplicity, assuming names are unique
+    # Or, you could use .push() and then set name as a field if names might not be unique
+    ref = db.reference('people').child(person_name) # 'people' node, with person_name as child key
+    
+    data = {
+        "age": age,
+        "height": height,
+        "industry": industry,
+        "total_films": total_films,
+        "hit_films": hit_films,
+        "last_updated": datetime.datetime.now().isoformat()
+    }
+    
+    try:
+        ref.set(data) # Set overwrites if exists, updates if not. Use .update() for partial updates.
+        st.success(f"Successfully added/updated biographical data for {person_name} in database!")
+        return True
+    except Exception as e:
+        st.error(f"❌ Error adding biographical data for {person_name} to database: {e}")
+        return False
 
 # --- Feature Extraction Function ---
 
@@ -305,7 +337,7 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
 
     with st.spinner("Extracting features and predicting..."):
         # Reset buffer position to the beginning before passing to librosa
-        audio_source_buffer.seek(0) 
+        audio_source_buffer.seek(0)
         features = extract_features(audio_source_buffer)
 
     if features is None:
@@ -338,8 +370,12 @@ try:
     USER_PASSWORD = st.secrets["credentials"]["user_password"]
     ADMIN_USERNAME = st.secrets["credentials"]["admin_username"]
     ADMIN_PASSWORD = st.secrets["credentials"]["admin_password"]
-except KeyError:
-    st.error("Credential secrets not found. Please ensure 'user_username', 'user_password', 'admin_username', and 'admin_password' are set in your .streamlit/secrets.toml file or Streamlit Cloud secrets.")
+    # New: Firebase Realtime Database URL
+    if "database_url" not in st.secrets["firebase"]:
+        st.error("Firebase 'database_url' not found in secrets. Please add it to your .streamlit/secrets.toml file.")
+        st.stop()
+except KeyError as e:
+    st.error(f"Credential or Firebase secrets not found: {e}. Please ensure 'user_username', 'user_password', 'admin_username', 'admin_password', and 'firebase.database_url' are set in your .streamlit/secrets.toml file or Streamlit Cloud secrets.")
     st.stop()
 
 
@@ -355,15 +391,25 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
+    # Ensure all actor/actress form state is reset
+    st.session_state['actor_name_input'] = ''
+    st.session_state['actor_age_input'] = 25 # Reset to default
+    st.session_state['actor_height_input'] = ''
+    st.session_state['actor_industry_input'] = ''
+    st.session_state['actor_total_films_input'] = 0
+    st.session_state['actor_hit_films_input'] = 0
+
+    st.rerun() # Rerun to go back to login page after logout
 
 def set_login_mode(mode):
     st.session_state.login_mode = mode
+    st.rerun() # Rerun to display the login form
 
 # --- Sidebar Content ---
 # This block will now handle sidebar content, including the logo and logout button
 if st.session_state.logged_in_as:
     with st.sidebar:
-        st.image("sso_logo.png", width=150) # Display logo at the top of the sidebar
+        st.image("sso_logo.png", width=100) # Display logo at the top of the sidebar
         st.markdown("---") # Separator
 
         if st.session_state.logged_in_as == 'user':
@@ -372,7 +418,8 @@ if st.session_state.logged_in_as:
             st.session_state.user_mode = user_mode # Store this in session state if needed elsewhere
         elif st.session_state.logged_in_as == 'admin':
             st.header("Admin Options")
-            admin_mode = st.radio("Choose Admin Action", ["Add New Speaker Data", "Retrain Model (Manual)"])
+            # Removed "Add New Actor/Actress Data" as a separate radio option
+            admin_mode = st.radio("Choose Admin Action", ["Add/Manage Person Data & Voice Samples", "Retrain Model (Manual)"])
             st.session_state.admin_mode = admin_mode # Store this in session state if needed elsewhere
 
         # Using a spacer to push the logout button to the bottom
@@ -469,8 +516,8 @@ if st.session_state.logged_in_as is None:
     
     # Conditionally display logo and main title for the initial role selection
     if st.session_state.login_mode is None:
-        st.image("sso_logo.png", width=150) 
-        st.markdown("## SSO Consultants Voice Recognizer") 
+        st.image("sso_logo.png", width=150)
+        st.markdown("## SSO Consultants Voice Recognizer")
         st.write("Please choose your login type to proceed.")
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -480,6 +527,7 @@ if st.session_state.logged_in_as is None:
         
     elif st.session_state.login_mode in ['user_login', 'admin_login']: # Specific login form
         role = "User" if st.session_state.login_mode == 'user_login' else "Admin"
+        st.write(f"Please log in as **{role}**.")
 
         with st.container(border=True): # Use a container with a border for visual grouping
             st.markdown(f"<h3 style='text-align: center;'>{role} Login</h3>", unsafe_allow_html=True)
@@ -503,7 +551,7 @@ if st.session_state.logged_in_as is None:
                         st.error("Invalid username or password for Admin access.")
             
             # Back button to return to role selection
-            st.button("Back to home page", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
+            st.button("← Back to Role Selection", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
 
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -557,18 +605,31 @@ elif st.session_state.logged_in_as == 'admin':
     st.markdown("---")
 
     # admin_mode is now read from st.session_state
-    admin_mode = st.session_state.get('admin_mode', "Add New Speaker Data")
+    admin_mode = st.session_state.get('admin_mode', "Add/Manage Person Data & Voice Samples")
 
-    if admin_mode == "Add New Speaker Data":
-        st.header("➕ Add/Record New Speaker Voice Data")
-        st.write("Record multiple voice samples for a person to train the recognition model. Each sample will be uploaded to Firebase Storage.")
+    if admin_mode == "Add/Manage Person Data & Voice Samples":
+        st.header("➕ Add/Manage Person Data & Voice Samples")
+        st.write("Enter details and record voice samples for a new or existing person.")
 
-        person_name = st.text_input("Enter the name of the person and click enter to record:", key="admin_person_name_input").strip()
+        with st.form("person_data_form"):
+            person_name = st.text_input("Person's Name (for voice and biographical data):", key="person_name_input_combined").strip()
 
-        if person_name:
-            st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
+            st.markdown("---")
+            st.subheader("Biographical Data (Actors/Actresses)")
+            st.write("Enter additional details for this person. These will be stored in the database.")
+            
+            actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
+            actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
+            actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
+            actor_total_films = st.number_input("Total Films", min_value=0, value=st.session_state.get('actor_total_films_input', 0), step=1, key="actor_total_films_input")
+            actor_hit_films = st.number_input("Hit Films", min_value=0, value=st.session_state.get('actor_hit_films_input', 0), step=1, key="actor_hit_films_input")
+
+            st.markdown("---")
+            st.subheader("Voice Samples for Recognition")
+            st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{person_name if person_name else '[Enter Name Above]'}**, each {DEFAULT_DURATION} seconds long.")
             st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
 
+            # Audio recording section moved into the form
             if 'recorded_samples_count' not in st.session_state:
                 st.session_state.recorded_samples_count = 0
                 st.session_state.temp_audio_files = [] # Store paths of locally saved temp files
@@ -595,48 +656,69 @@ elif st.session_state.logged_in_as == 'admin':
                             st.session_state.recorded_samples_count += 1
                             st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
                             st.session_state.current_sample_processed = True # Mark as processed
-                            st.rerun() # Keep this rerun to advance to the "Next Sample" button immediately
+                            st.rerun() # Rerun to advance to the "Next Sample" button immediately
                 else:
                     if st.button(f"Next Sample ({st.session_state.recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)"):
                         st.session_state.current_sample_processed = False # Reset for next recording
-                        st.rerun() # Keep this rerun to display the recorder for the next sample
+                        st.rerun() # Rerun to display the recorder for the next sample
                     else:
                         st.info(f"Sample {st.session_state.recorded_samples_count} collected. Click 'Next Sample' to continue.")
 
-            else: # All samples collected
-                st.success(f"All {DEFAULT_NUM_SAMPLES} samples recorded for {person_name}!")
-                
-                if st.button("Upload Samples and Train Model"):
-                    with st.spinner("Uploading samples to Firebase and retraining model..."):
+            # Submit button for the entire form (voice samples must be collected first)
+            submitted_combined_data = st.form_submit_button("Save All Data & Retrain Model")
+
+            if submitted_combined_data:
+                if not person_name:
+                    st.error("Please enter the Person's Name.")
+                elif st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
+                    st.error(f"Please record all {DEFAULT_NUM_SAMPLES} voice samples before saving data.")
+                elif not (actor_name and actor_industry): # Basic validation for biographical data
+                     st.error("Please fill in Name and Industry fields for biographical data.")
+                else:
+                    with st.spinner("Saving all data to Firebase and retraining model..."):
+                        # 1. Save biographical data to Realtime Database
+                        bio_data_saved = add_person_data_to_firebase_db(
+                            person_name, actor_age, actor_height, actor_industry, actor_total_films, actor_hit_films
+                        )
+
+                        # 2. Upload voice samples to Storage
                         uploaded_count = 0
                         for local_file_path in st.session_state.temp_audio_files:
                             firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
                             if upload_audio_to_firebase(local_file_path, firebase_path):
                                 uploaded_count += 1
                             os.remove(local_file_path) # Clean up local temp file
-                        
-                        st.info(f"{uploaded_count} samples uploaded for {person_name}.")
-                        
-                        # Clear caches to ensure new data is loaded
-                        load_data_from_firebase.clear()
-                        train_and_save_model.clear()
-                        load_trained_model.clear()
-                        
-                        # After clearing caches and uploading, Streamlit's natural rerun will pick up changes.
-                        st.session_state.recorded_samples_count = 0 # Reset for next session
-                        st.session_state.temp_audio_files = []
-                        st.session_state.current_sample_processed = False # Reset for next session
-                        st.rerun() # Keep this rerun to refresh the page after training is complete.
-                else:
-                    st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
-        else:
-            # Reset session state if name is cleared
-            if 'recorded_samples_count' in st.session_state:
-                del st.session_state.recorded_samples_count
-            if 'temp_audio_files' in st.session_state:
-                del st.session_state.temp_audio_files
-            if 'current_sample_processed' in st.session_state:
-                del st.session_state.current_sample_processed
+
+                        st.info(f"{uploaded_count} voice samples uploaded for {person_name}.")
+
+                        if bio_data_saved and uploaded_count == DEFAULT_NUM_SAMPLES:
+                            st.success(f"All data for {person_name} saved successfully!")
+
+                            # Clear caches to ensure new data is loaded for training
+                            load_data_from_firebase.clear()
+                            train_and_save_model.clear()
+                            load_trained_model.clear()
+
+                            # Reset form state for next entry
+                            st.session_state.recorded_samples_count = 0
+                            st.session_state.temp_audio_files = []
+                            st.session_state.current_sample_processed = False
+                            st.session_state['person_name_input_combined'] = ''
+                            st.session_state['actor_age_input'] = 25
+                            st.session_state['actor_height_input'] = ''
+                            st.session_state['actor_industry_input'] = ''
+                            st.session_state['actor_total_films_input'] = 0
+                            st.session_state['actor_hit_films_input'] = 0
+
+                            st.rerun() # Rerun to clear the form and reflect changes
+                        else:
+                            st.error("There was an issue saving all data. Please check messages above.")
+            else: # When form is not submitted, and name is empty, clear voice recording state
+                if not person_name and 'recorded_samples_count' in st.session_state and st.session_state.recorded_samples_count > 0:
+                    st.session_state.recorded_samples_count = 0
+                    st.session_state.temp_audio_files = []
+                    st.session_state.current_sample_processed = False
+                    st.rerun() # Rerun to clear the recording section if name is blanked out
 
     elif admin_mode == "Retrain Model (Manual)":
         st.header("🔄 Manually Retrain Model")
