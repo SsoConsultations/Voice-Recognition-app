@@ -33,11 +33,11 @@ LABELS_FILENAME = 'id_to_label_map.pkl'
 # User-specific audio data will be stored privately
 USER_DATA_PATH = "artifacts" # Base path for user-specific data
 
-TEMP_RECORDINGS_DIR = "temp_recordings" # For local temporary storage before/after Firebase interaction
+TEMP_RECORDINGS_DIR = "temp_records" # Changed name to avoid potential conflicts/confusion, for local temporary storage before/after Firebase interaction
 
 # Recording Specific
-DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person (increased to 5)
-DEFAULT_DURATION = 5.0      # Duration of each recording in seconds (increased to 5.0)
+DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person
+DEFAULT_DURATION = 5.0      # Duration of each recording in seconds
 DEFAULT_SAMPLE_RATE = 44100 # Sample rate (samples per second). 44100 Hz is standard CD quality.
 
 # Feature Extraction Specific
@@ -45,7 +45,7 @@ N_MFCC = 13 # Number of MFCCs to extract
 
 # --- Canvas Environment Variables (Provided by Canvas) ---
 # These variables are automatically injected by the Canvas environment.
-# They are Python variables, so use 'locals().get()' to check for existence and provide fallbacks.
+# Use 'locals().get()' to check for existence and provide fallbacks.
 app_id = locals().get('__app_id', 'default-app-id')
 initial_auth_token = locals().get('__initial_auth_token', '')
 
@@ -53,7 +53,7 @@ initial_auth_token = locals().get('__initial_auth_token', '')
 # --- Admin User IDs (Replace with actual UIDs of your admin users) ---
 # To find a user's UID: log in as that user, then check st.session_state.user_id
 ADMIN_UIDS = [
-    "your_admin_uid_1", # Replace with actual UID from Firebase Auth
+    "your_admin_uid_1", # Replace with actual UID from Firebase Auth (e.g., "abcdef12345")
     "your_admin_uid_2"  # Replace with actual UID
 ]
 
@@ -63,14 +63,21 @@ def initialize_firebase_app():
     if not firebase_admin._apps: # Check if Firebase app is already initialized
         try:
             # Explicitly get service account JSON string from Streamlit secrets
-            service_account_json_str = st.secrets["firebase"]["service_account_json"]
-            storage_bucket_name = st.secrets["firebase"]["storage_bucket"]
+            # Ensure st.secrets["firebase"] exists and is a dictionary.
+            firebase_secrets = st.secrets.get("firebase")
+            if not isinstance(firebase_secrets, dict):
+                raise KeyError("Streamlit secrets for 'firebase' not found or malformed. Expected a dictionary.")
+
+            service_account_json_str = firebase_secrets.get("service_account_json")
+            storage_bucket_name = firebase_secrets.get("storage_bucket")
+
+            if not service_account_json_str or not storage_bucket_name:
+                raise KeyError("Missing 'service_account_json' or 'storage_bucket' in Streamlit secrets under [firebase].")
 
             # Parse the JSON string into a dictionary
             service_account_info = json.loads(service_account_json_str)
             
             # Initialize Firebase Admin SDK with the service account info
-            # This is the correct way to pass the service account JSON to firebase-admin
             cred = credentials.Certificate(service_account_info)
             app = firebase_admin.initialize_app(cred, {'storageBucket': storage_bucket_name})
             
@@ -93,10 +100,11 @@ def initialize_firebase_app():
 os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
 
 # Initialize Firebase (this will run once due to @st.cache_resource)
+# Check if initialization was successful before proceeding
 if not initialize_firebase_app():
     st.stop() # Stop the app if Firebase cannot be initialized
 
-# Get Firebase services from session state
+# Get Firebase services from session state (only if initialization was successful)
 firebase_app = st.session_state.firebase_app
 firebase_db = st.session_state.firebase_db
 firebase_auth = st.session_state.firebase_auth
@@ -419,6 +427,9 @@ if st.session_state.auth_ready:
             st.sidebar.info("Role: User")
         
         if st.sidebar.button("Logout"):
+            # This part handles logging out.
+            # In a deployed Canvas app, the user might be re-logged in automatically
+            # if a custom token is still active, but this clears session state.
             firebase_auth.sign_out()
             st.session_state.auth_ready = False # Force re-auth on next run
             st.session_state.user_id = None
@@ -483,6 +494,7 @@ elif app_mode == "Add New Speaker Data":
             
             # Only show the recorder if the current sample hasn't been processed yet
             if not st.session_state.current_sample_processed:
+                # Removed the 'key' argument here as it causes issues with st_audiorec
                 wav_audio_data = st_audiorec() 
 
                 if wav_audio_data is not None:
@@ -584,7 +596,7 @@ elif app_mode == "Recognize Speaker Live":
     else:
         st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
         
-        # Removed the 'key' argument here
+        # Removed the 'key' argument here as it causes issues with st_audiorec
         wav_audio_data = st_audiorec() 
         
         if wav_audio_data is not None:
