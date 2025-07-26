@@ -530,7 +530,6 @@ if st.session_state.logged_in_as is None:
         
     elif st.session_state.login_mode in ['user_login', 'admin_login']: # Specific login form
         role = "User" if st.session_state.login_mode == 'user_login' else "Admin"
-        st.write(f"Please log in as **{role}**.")
 
         with st.container(border=True): # Use a container with a border for visual grouping
             st.markdown(f"<h3 style='text-align: center;'>{role} Login</h3>", unsafe_allow_html=True)
