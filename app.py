@@ -89,6 +89,7 @@ if not initialize_firebase_app():
 
 def upload_audio_to_firebase(local_file_path, destination_blob_name):
     """Uploads a file to Firebase Storage."""
+    st.info(f"Attempting to upload: {local_file_path} to {destination_blob_name}") # Debug print
     try:
         bucket = storage.bucket()
         blob = bucket.blob(destination_blob_name)
@@ -97,6 +98,7 @@ def upload_audio_to_firebase(local_file_path, destination_blob_name):
         return True
     except Exception as e:
         st.error(f"❌ Error uploading {os.path.basename(local_file_path)} to Firebase: {e}")
+        st.exception(e) # This will print the full traceback in Streamlit
         return False
 
 def download_audio_from_firebase(source_blob_name, destination_file_path):
@@ -246,18 +248,30 @@ def train_and_save_model():
     st.code(classification_report(y_test, y_pred, target_names=id_to_label))
 
     # Save the trained model and the ID-to-label mapping locally first
-    # Then upload to Firebase Storage
+    st.info(f"Saving model locally to {MODEL_FILENAME}")
     with open(MODEL_FILENAME, 'wb') as f:
         pickle.dump(model, f)
+    st.info(f"Saving labels locally to {LABELS_FILENAME}")
     with open(LABELS_FILENAME, 'wb') as f:
         pickle.dump(id_to_label, f)
 
-    upload_audio_to_firebase(MODEL_FILENAME, MODEL_FILENAME)
-    upload_audio_to_firebase(LABELS_FILENAME, LABELS_FILENAME)
-    
+    # Then upload to Firebase Storage
+    st.info(f"Attempting to upload model files to Firebase Storage...")
+    model_uploaded = upload_audio_to_firebase(MODEL_FILENAME, MODEL_FILENAME)
+    labels_uploaded = upload_audio_to_firebase(LABELS_FILENAME, LABELS_FILENAME)
+
+    if model_uploaded and labels_uploaded:
+        st.success("Model and labels successfully uploaded to Firebase Storage.")
+    else:
+        st.error("Failed to upload model or labels to Firebase Storage. Check previous error messages.")
+
     # Clean up local model files after upload
-    os.remove(MODEL_FILENAME)
-    os.remove(LABELS_FILENAME)
+    if os.path.exists(MODEL_FILENAME):
+        os.remove(MODEL_FILENAME)
+        st.info(f"Cleaned up local file: {MODEL_FILENAME}")
+    if os.path.exists(LABELS_FILENAME):
+        os.remove(LABELS_FILENAME)
+        st.info(f"Cleaned up local file: {LABELS_FILENAME}")
 
     return model, id_to_label
 
@@ -291,6 +305,7 @@ def load_trained_model():
         return model, id_to_label
     except Exception as e:
         st.error(f"❌ Error loading model/labels from Firebase: {e}")
+        st.exception(e) # Add exception details for debugging
         return None, None
 
 # --- Speaker Recognition Functions ---
@@ -363,8 +378,6 @@ def logout():
     if 'person_name_input_value_control' in st.session_state:
         st.session_state['person_name_input_value_control'] = '' 
 
-    # Removed all actor/actress specific session state resets
-    
     st.rerun() # Rerun to go back to login page after logout
 
 def set_login_mode(mode):
@@ -542,7 +555,6 @@ elif st.session_state.logged_in_as == 'user':
                 audio_buffer = io.BytesIO(uploaded_file.getvalue())
                 
                 st.write("Analyzing uploaded file...")
-                # Call recognize_speaker_from_audio_source
                 recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
 
     elif user_mode == "Recognize Speaker Live":
@@ -561,7 +573,6 @@ elif st.session_state.logged_in_as == 'user':
                 audio_buffer = io.BytesIO(wav_audio_data)
                 
                 st.write("Analyzing live recording...")
-                # Call recognize_speaker_from_audio_source
                 recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
 
 # --- Admin Section ---
