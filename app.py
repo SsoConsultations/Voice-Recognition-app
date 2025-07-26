@@ -358,7 +358,6 @@ def logout():
 
 def set_login_mode(mode):
     st.session_state.login_mode = mode
-    st.rerun() # Rerun to display the login form
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
