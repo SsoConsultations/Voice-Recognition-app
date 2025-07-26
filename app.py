@@ -347,7 +347,6 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
-    st.rerun() # Rerun to go back to login page
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
