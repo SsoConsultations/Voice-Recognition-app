@@ -125,8 +125,6 @@ def list_files_in_firebase_storage(prefix=""):
 
 def add_person_data_to_firebase_db(person_name, age, height, industry, total_films, hit_films):
     """Adds person (actor/actress) data to Firebase Realtime Database."""
-    # Using person_name as the key for simplicity, assuming names are unique
-    # Or, you could use .push() and then set name as a field if names might not be unique
     ref = db.reference('people').child(person_name) # 'people' node, with person_name as child key
     
     data = {
@@ -145,6 +143,17 @@ def add_person_data_to_firebase_db(person_name, age, height, industry, total_fil
     except Exception as e:
         st.error(f"❌ Error adding biographical data for {person_name} to database: {e}")
         return False
+
+@st.cache_data(ttl=3600) # Cache the result for an hour to reduce database reads
+def get_person_data_from_firebase_db(person_name):
+    """Fetches biographical data for a person from Firebase Realtime Database."""
+    try:
+        ref = db.reference(f'people/{person_name}')
+        data = ref.get()
+        return data
+    except Exception as e:
+        st.warning(f"Could not retrieve biographical data for {person_name} from database: {e}")
+        return None
 
 # --- Feature Extraction Function ---
 
@@ -327,21 +336,20 @@ def load_trained_model():
 
 # --- Speaker Recognition Functions ---
 
-def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer, sample_rate):
+def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer):
     """
-    Recognizes a speaker from an audio source (BytesIO buffer) and sample rate.
-    This is a unified function for both file uploads and live recordings.
+    Recognizes a speaker from an audio source (BytesIO buffer).
+    Returns the predicted speaker name or None if recognition fails.
     """
     if model is None or id_to_label is None:
-        return "Not Available (Model not loaded)"
+        return None, "Not Available (Model not loaded)"
 
     with st.spinner("Extracting features and predicting..."):
-        # Reset buffer position to the beginning before passing to librosa
-        audio_source_buffer.seek(0)
+        audio_source_buffer.seek(0) 
         features = extract_features(audio_source_buffer)
 
     if features is None:
-        return "Unknown Speaker (Feature Extraction Failed)"
+        return None, "Unknown Speaker (Feature Extraction Failed)"
 
     features = features.reshape(1, -1) # Reshape for prediction
 
@@ -351,8 +359,7 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
     probabilities = model.predict_proba(features)[0]
     confidence = probabilities[prediction_id] * 100
 
-    st.write(f"Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
-    return predicted_speaker
+    return predicted_speaker, confidence
 
 # --- Streamlit UI Layout ---
 
@@ -392,7 +399,7 @@ def logout():
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
     # Ensure all actor/actress form state is reset
-    st.session_state['actor_name_input'] = ''
+    st.session_state['person_name_input_combined'] = ''
     st.session_state['actor_age_input'] = 25 # Reset to default
     st.session_state['actor_height_input'] = ''
     st.session_state['actor_industry_input'] = ''
@@ -404,7 +411,7 @@ def set_login_mode(mode):
 
 # --- Sidebar Content ---
 # This block will now handle sidebar content, including the logo and logout button
-if st.session_state.logged_in_as:
+if st.session_in_state.logged_in_as:
     with st.sidebar:
         st.image("sso_logo.png", width=150) # Display logo at the top of the sidebar
         st.markdown("---") # Separator
@@ -415,7 +422,6 @@ if st.session_state.logged_in_as:
             st.session_state.user_mode = user_mode # Store this in session state if needed elsewhere
         elif st.session_state.logged_in_as == 'admin':
             st.header("Admin Options")
-            # Removed "Add New Actor/Actress Data" as a separate radio option
             admin_mode = st.radio("Choose Admin Action", ["Add/Manage Person Data & Voice Samples", "Retrain Model (Manual)"])
             st.session_state.admin_mode = admin_mode # Store this in session state if needed elsewhere
 
@@ -561,6 +567,23 @@ elif st.session_state.logged_in_as == 'user':
     # user_mode is now read from st.session_state
     user_mode = st.session_state.get('user_mode', "Recognize Speaker from File")
 
+    # Define a helper function to display biographical data
+    def display_biographical_data(person_name):
+        if person_name not in ["Not Available (Model not loaded)", "Unknown Speaker (Feature Extraction Failed)"]:
+            bio_data = get_person_data_from_firebase_db(person_name)
+            if bio_data:
+                st.subheader(f"Biographical Data for {person_name}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Age:** {bio_data.get('age', 'N/A')}")
+                    st.write(f"**Height:** {bio_data.get('height', 'N/A')}")
+                    st.write(f"**Industry:** {bio_data.get('industry', 'N/A')}")
+                with col2:
+                    st.write(f"**Total Films:** {bio_data.get('total_films', 'N/A')}")
+                    st.write(f"**Hit Films:** {bio_data.get('hit_films', 'N/A')}")
+            else:
+                st.info(f"No biographical data found for {person_name}.")
+
     if user_mode == "Recognize Speaker from File":
         st.header("🔍 Recognize Speaker from a File")
         if trained_model is None:
@@ -574,8 +597,13 @@ elif st.session_state.logged_in_as == 'user':
                 audio_buffer = io.BytesIO(uploaded_file.getvalue())
                 
                 st.write("Analyzing uploaded file...")
-                recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
-                st.success(f"File analysis complete. Predicted Speaker: **{recognized_speaker}**")
+                predicted_speaker, confidence = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer)
+                
+                if predicted_speaker:
+                    st.success(f"File analysis complete. Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
+                    display_biographical_data(predicted_speaker)
+                else:
+                    st.warning("Could not identify speaker.")
 
     elif user_mode == "Recognize Speaker Live":
         st.header("🎤 Recognize Speaker from Live Microphone Input")
@@ -593,8 +621,13 @@ elif st.session_state.logged_in_as == 'user':
                 audio_buffer = io.BytesIO(wav_audio_data)
                 
                 st.write("Analyzing live recording...")
-                recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
-                st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
+                predicted_speaker, confidence = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer)
+                
+                if predicted_speaker:
+                    st.success(f"Live analysis complete. Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
+                    display_biographical_data(predicted_speaker)
+                else:
+                    st.warning("Could not identify speaker.")
 
 # --- Admin Section ---
 elif st.session_state.logged_in_as == 'admin':
@@ -615,6 +648,7 @@ elif st.session_state.logged_in_as == 'admin':
             st.subheader("Biographical Data (Actors/Actresses)")
             st.write("Enter additional details for this person. These will be stored in the database.")
             
+            # Use get() for form values to ensure they are retrieved from session state on form reset
             actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
             actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
             actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
@@ -665,12 +699,11 @@ elif st.session_state.logged_in_as == 'admin':
             submitted_combined_data = st.form_submit_button("Save All Data & Retrain Model")
 
             if submitted_combined_data:
+                # Basic validation for form submission
                 if not person_name:
                     st.error("Please enter the Person's Name.")
                 elif st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
                     st.error(f"Please record all {DEFAULT_NUM_SAMPLES} voice samples before saving data.")
-                elif not (actor_name and actor_industry): # Basic validation for biographical data
-                     st.error("Please fill in Name and Industry fields for biographical data.")
                 else:
                     with st.spinner("Saving all data to Firebase and retraining model..."):
                         # 1. Save biographical data to Realtime Database
@@ -695,6 +728,7 @@ elif st.session_state.logged_in_as == 'admin':
                             load_data_from_firebase.clear()
                             train_and_save_model.clear()
                             load_trained_model.clear()
+                            get_person_data_from_firebase_db.clear() # New: Clear the DB data cache
 
                             # Reset form state for next entry
                             st.session_state.recorded_samples_count = 0
@@ -725,6 +759,6 @@ elif st.session_state.logged_in_as == 'admin':
             load_data_from_firebase.clear() # Clear data cache to ensure fresh load
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
+            get_person_data_from_firebase_db.clear() # New: Clear the DB data cache
             
-            # After clearing caches, Streamlit's natural rerun will pick up changes.
             st.rerun() # Keep this rerun to refresh the page after training is complete.
