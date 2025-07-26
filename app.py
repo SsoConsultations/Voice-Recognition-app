@@ -674,7 +674,7 @@ elif st.session_state.logged_in_as == 'admin':
             if not person_name_for_save:
                 st.error("Please enter the Person's Name above before recording samples.")
             elif not st.session_state.current_sample_processed:
-                wav_audio_data = st_audiorec(key=f"audiorec_{st.session_state.recorded_samples_count}") # Add a unique key
+                wav_audio_data = st_audiorec() # REMOVED: key=f"audiorec_{st.session_state.recorded_samples_count}"
                 
                 if wav_audio_data is not None:
                     # The name check is now done before even showing the recorder
