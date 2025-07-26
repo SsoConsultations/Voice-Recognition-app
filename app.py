@@ -329,62 +329,33 @@ st.set_page_config(page_title="Speaker Recognition", layout="centered", initial_
 # Initialize session state for login
 if 'logged_in_as' not in st.session_state:
     st.session_state.logged_in_as = None
-if 'login_mode' not in st.session_state:
-    st.session_state.login_mode = None # Can be 'user_login', 'admin_login', or None
-
-# Load credentials from Streamlit secrets
-try:
-    USER_USERNAME = st.secrets["credentials"]["user_username"]
-    USER_PASSWORD = st.secrets["credentials"]["user_password"]
-    ADMIN_USERNAME = st.secrets["credentials"]["admin_username"]
-    ADMIN_PASSWORD = st.secrets["credentials"]["admin_password"]
-except KeyError:
-    st.error("Credential secrets not found. Please ensure 'user_username', 'user_password', 'admin_username', and 'admin_password' are set in your .streamlit/secrets.toml file or Streamlit Cloud secrets.")
-    st.stop()
-
 
 # Load model at the start (cached) - this will happen only once unless caches are cleared
 trained_model, id_to_label_map = load_trained_model()
 
 # --- Callback Functions for Login/Logout ---
+def set_user_login():
+    st.session_state.logged_in_as = 'user'
+    st.rerun() # Explicit rerun after state change for immediate effect
+
+def set_admin_login():
+    st.session_state.logged_in_as = 'admin'
+    st.rerun() # Explicit rerun after state change for immediate effect
+
 def logout():
     """Resets the login state and clears relevant session variables."""
     st.session_state.logged_in_as = None
-    st.session_state.login_mode = None # Also reset login mode
     # Optionally clear relevant session states for recording/recognition if needed
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
-    st.rerun() # Rerun to go back to login page after logout
+    st.rerun() # Rerun to go back to login page
 
-def set_login_mode(mode):
-    st.session_state.login_mode = mode
-    st.rerun() # Rerun to display the login form
-
-# --- Sidebar Content ---
-# This block will now handle sidebar content, including the logo and logout button
+# Display Logout button if logged in
 if st.session_state.logged_in_as:
-    with st.sidebar:
-        st.image("sso_logo.png", width=100) # Display logo at the top of the sidebar
-        st.markdown("---") # Separator
+    st.sidebar.button("Logout", on_click=logout)
 
-        if st.session_state.logged_in_as == 'user':
-            st.header("User Options")
-            user_mode = st.radio("Choose Recognition Method", ["Recognize Speaker from File", "Recognize Speaker Live"])
-            st.session_state.user_mode = user_mode # Store this in session state if needed elsewhere
-        elif st.session_state.logged_in_as == 'admin':
-            st.header("Admin Options")
-            admin_mode = st.radio("Choose Admin Action", ["Add New Speaker Data", "Retrain Model (Manual)"])
-            st.session_state.admin_mode = admin_mode # Store this in session state if needed elsewhere
-
-        # Using a spacer to push the logout button to the bottom
-        st.markdown("<div style='position: fixed; bottom: 0; width: 200px; padding-bottom: 20px;'>", unsafe_allow_html=True)
-        st.button("Logout", on_click=logout)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-# --- Main Page Content ---
-
-# --- Login Page (Initial Role Selection or Specific Login Form) ---
+# --- Login Page ---
 if st.session_state.logged_in_as is None:
     # Custom CSS for centering and button styling
     st.markdown(
@@ -404,16 +375,10 @@ if st.session_state.logged_in_as is None:
             text-align: center;
             padding-bottom: 20px; /* Add some padding at the bottom if needed */
         }
-        .login-form-container {
-            width: 80%;
-            max-width: 400px;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            background-color: #f9f9f9;
-        }
-        .stTextInput label, .stNumberInput label {
-            font-weight: bold;
+        .login-buttons {
+            display: flex;
+            gap: 20px; /* Space between buttons */
+            margin-top: 30px;
         }
         .stButton button {
             background-color: #4CAF50; /* Green */
@@ -428,39 +393,9 @@ if st.session_state.logged_in_as is None:
             border-radius: 8px;
             border: none;
             transition-duration: 0.4s;
-            width: 100%; /* Make login buttons full width */
         }
         .stButton button:hover {
             background-color: #45a049;
-        }
-        .login-buttons-initial {
-            display: flex;
-            gap: 20px; /* Space between buttons */
-            margin-top: 30px;
-        }
-        .back-button {
-            margin-top: 20px;
-            background-color: #f44336; /* Red for back button */
-        }
-        .back-button:hover {
-            background-color: #da190b;
-        }
-        /* Style for the sidebar container to ensure proper positioning of the fixed logout button */
-        [data-testid="stSidebar"] {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between; /* Pushes content apart */
-            padding-bottom: 0 !important; /* Remove default padding that might interfere */
-        }
-        [data-testid="stSidebarContent"] {
-            display: flex;
-            flex-direction: column;
-            flex-grow: 1; /* Allow content to grow and push the fixed element down */
-        }
-        /* Ensure the fixed element is constrained within the sidebar */
-        [data-testid="stSidebar"] .fixed-bottom-spacer {
-            margin-top: auto; /* Pushes this element to the bottom if content above allows */
-            padding-top: 20px; /* Space above logout button */
         }
         </style>
         """,
@@ -469,45 +404,18 @@ if st.session_state.logged_in_as is None:
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
-    # Conditionally display logo and main title for the initial role selection
-    if st.session_state.login_mode is None:
-        st.image("sso_logo.png", width=150) 
-        st.markdown("## SSO Consultants Voice Recognizer") 
-        st.write("Please choose your login type to proceed.")
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.button("Login as User", key="choose_user", on_click=lambda: set_login_mode('user_login'))
-        with col2:
-            st.button("Login as Admin", key="choose_admin", on_click=lambda: set_login_mode('admin_login'))
-        
-    elif st.session_state.login_mode in ['user_login', 'admin_login']: # Specific login form
-        role = "User" if st.session_state.login_mode == 'user_login' else "Admin"
-        st.write(f"Please log in as **{role}**.")
+    st.image("sso_logo.png", width=150) 
+    
+    st.markdown("## SSO Consultants Voice Recognition Model") 
+    st.write("Please choose your login type.")
 
-        with st.container(border=True): # Use a container with a border for visual grouping
-            st.markdown(f"<h3 style='text-align: center;'>{role} Login</h3>", unsafe_allow_html=True)
-            username = st.text_input("Username", key=f"{role.lower()}_username_input")
-            password = st.text_input("Password", type="password", key=f"{role.lower()}_password_input")
+    col1, col2 = st.columns([1, 1]) # Create two columns for buttons
 
-            if st.button("Submit Login", key=f"submit_{role.lower()}_login_final"):
-                if role == "User":
-                    if username == USER_USERNAME and password == USER_PASSWORD:
-                        st.session_state.logged_in_as = 'user'
-                        st.success("Logged in as User!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid username or password for User access.")
-                elif role == "Admin":
-                    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-                        st.session_state.logged_in_as = 'admin'
-                        st.success("Logged in as Admin!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid username or password for Admin access.")
+    with col1:
+        st.button("Login as User", key="login_user", on_click=set_user_login)
+    with col2:
+        st.button("Login as Admin", key="login_admin", on_click=set_admin_login)
             
-            # Back button to return to role selection
-            st.button("← Back to Role Selection", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
-
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -516,8 +424,8 @@ elif st.session_state.logged_in_as == 'user':
     st.title("🗣️ User Portal: Recognize Speaker")
     st.markdown("---")
     
-    # user_mode is now read from st.session_state
-    user_mode = st.session_state.get('user_mode', "Recognize Speaker from File")
+    st.sidebar.header("User Options")
+    user_mode = st.sidebar.radio("Choose Recognition Method", ["Recognize Speaker from File", "Recognize Speaker Live"])
 
     if user_mode == "Recognize Speaker from File":
         st.header("🔍 Recognize Speaker from a File")
@@ -559,14 +467,14 @@ elif st.session_state.logged_in_as == 'admin':
     st.title("⚙️ Admin Portal: Manage Speaker Data")
     st.markdown("---")
 
-    # admin_mode is now read from st.session_state
-    admin_mode = st.session_state.get('admin_mode', "Add New Speaker Data")
+    st.sidebar.header("Admin Options")
+    admin_mode = st.sidebar.radio("Choose Admin Action", ["Add New Speaker Data", "Retrain Model (Manual)"])
 
     if admin_mode == "Add New Speaker Data":
         st.header("➕ Add/Record New Speaker Voice Data")
         st.write("Record multiple voice samples for a person to train the recognition model. Each sample will be uploaded to Firebase Storage.")
 
-        person_name = st.text_input("Enter the name of the person and click enter to record:", key="admin_person_name_input").strip()
+        person_name = st.text_input("Enter the name of the person to record:", key="admin_person_name_input").strip()
 
         if person_name:
             st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
@@ -633,6 +541,7 @@ elif st.session_state.logged_in_as == 'admin':
                 else:
                     st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
         else:
+            st.info("Please enter a person's name to start recording samples.")
             # Reset session state if name is cleared
             if 'recorded_samples_count' in st.session_state:
                 del st.session_state.recorded_samples_count
