@@ -54,7 +54,7 @@ def initialize_firebase_app():
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
-            # st.success("✅ Firebase initialized successfully from secrets.") # Removed this line
+            st.success("✅ Firebase initialized successfully from secrets.")
             return True
         except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
@@ -66,7 +66,7 @@ def initialize_firebase_app():
                 try:
                     cred = credentials.Certificate(local_service_account_path)
                     firebase_admin.initialize_app(cred, {'storageBucket': local_storage_bucket})
-                    # st.success("✅ Firebase initialized successfully from local file.") # Removed this line
+                    st.success("✅ Firebase initialized successfully from local file.")
                     return True
                 except Exception as e_local:
                     st.error(f"❌ Error initializing Firebase from local file: {e_local}. Please ensure your 'firebase_service_account.json' is correct.")
@@ -273,7 +273,7 @@ def load_trained_model():
         labels_downloaded = download_audio_from_firebase(LABELS_FILENAME, temp_labels_path)
 
         if not model_downloaded or not labels_downloaded:
-            # Removed: st.warning("No existing model or labels found in Firebase Storage. Please add new data to train the model.")
+            st.warning("No existing model or labels found in Firebase Storage. Please add new data to train the model.")
             # Ensure cleanup if only one part downloaded
             if os.path.exists(temp_model_path): os.remove(temp_model_path)
             if os.path.exists(temp_labels_path): os.remove(temp_labels_path)
@@ -283,7 +283,7 @@ def load_trained_model():
             model = pickle.load(f)
         with open(temp_labels_path, 'rb') as f:
             id_to_label = pickle.load(f)
-        # Removed: st.success("✅ Model and labels loaded successfully from Firebase.")
+        st.success("✅ Model and labels loaded successfully from Firebase.")
         
         # Clean up temporary downloaded files
         os.remove(temp_model_path)
@@ -331,17 +331,10 @@ if 'logged_in_as' not in st.session_state:
     st.session_state.logged_in_as = None
 
 # Load model at the start (cached) - this will happen only once unless caches are cleared
+# These are top-level variables, no 'global' needed for their initial assignment here.
 trained_model, id_to_label_map = load_trained_model()
 
-# --- Callback Functions for Login/Logout ---
-def set_user_login():
-    st.session_state.logged_in_as = 'user'
-    st.rerun() # Explicit rerun after state change for immediate effect
-
-def set_admin_login():
-    st.session_state.logged_in_as = 'admin'
-    st.rerun() # Explicit rerun after state change for immediate effect
-
+# --- Logout Function ---
 def logout():
     """Resets the login state and clears relevant session variables."""
     st.session_state.logged_in_as = None
@@ -349,7 +342,7 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
-    st.rerun() # Rerun to go back to login page
+    st.rerun()
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
@@ -404,17 +397,23 @@ if st.session_state.logged_in_as is None:
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
+    # Ensure 'sso_logo.png' is in the same directory as your app.py file
     st.image("sso_logo.png", width=150) 
     
+    # Changed title here
     st.markdown("## SSO Consultants Voice Recognition Model") 
     st.write("Please choose your login type.")
 
     col1, col2 = st.columns([1, 1]) # Create two columns for buttons
 
     with col1:
-        st.button("Login as User", key="login_user", on_click=set_user_login)
+        if st.button("Login as User", key="login_user"):
+            st.session_state.logged_in_as = 'user'
+            st.rerun()
     with col2:
-        st.button("Login as Admin", key="login_admin", on_click=set_admin_login)
+        if st.button("Login as Admin", key="login_admin"):
+            st.session_state.logged_in_as = 'admin'
+            st.rerun()
             
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -506,11 +505,11 @@ elif st.session_state.logged_in_as == 'admin':
                             st.session_state.recorded_samples_count += 1
                             st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
                             st.session_state.current_sample_processed = True # Mark as processed
-                            st.rerun() # Keep this rerun to advance to the "Next Sample" button immediately
+                            st.rerun() # Rerun to show the 'Next Sample' button
                 else:
                     if st.button(f"Next Sample ({st.session_state.recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)"):
                         st.session_state.current_sample_processed = False # Reset for next recording
-                        st.rerun() # Keep this rerun to display the recorder for the next sample
+                        st.rerun() # Rerun to display the recorder for the next sample
                     else:
                         st.info(f"Sample {st.session_state.recorded_samples_count} collected. Click 'Next Sample' to continue.")
 
@@ -533,11 +532,12 @@ elif st.session_state.logged_in_as == 'admin':
                         train_and_save_model.clear()
                         load_trained_model.clear()
                         
-                        # After clearing caches and uploading, Streamlit's natural rerun will pick up changes.
+                        # After clearing caches and uploading, trigger a rerun.
+                        # The top-level load_trained_model() will then re-execute and reload the new model.
                         st.session_state.recorded_samples_count = 0 # Reset for next session
                         st.session_state.temp_audio_files = []
                         st.session_state.current_sample_processed = False # Reset for next session
-                        st.rerun() # Keep this rerun to refresh the page after training is complete.
+                        st.rerun()
                 else:
                     st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
         else:
@@ -559,5 +559,6 @@ elif st.session_state.logged_in_as == 'admin':
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
             
-            # After clearing caches, Streamlit's natural rerun will pick up changes.
-            st.rerun() # Keep this rerun to refresh the page after training is complete.
+            # After clearing caches, trigger a rerun.
+            # The top-level load_trained_model() will then re-execute and reload the new model.
+            st.rerun()
