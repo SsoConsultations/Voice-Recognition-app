@@ -125,6 +125,8 @@ def list_files_in_firebase_storage(prefix=""):
 
 def add_person_data_to_firebase_db(person_name, age, height, industry, total_films, hit_films):
     """Adds person (actor/actress) data to Firebase Realtime Database."""
+    # Using person_name as the key for simplicity, assuming names are unique
+    # Or, you could use .push() and then set name as a field if names might not be unique
     ref = db.reference('people').child(person_name) # 'people' node, with person_name as child key
     
     data = {
@@ -144,15 +146,14 @@ def add_person_data_to_firebase_db(person_name, age, height, industry, total_fil
         st.error(f"❌ Error adding biographical data for {person_name} to database: {e}")
         return False
 
-@st.cache_data(ttl=3600) # Cache the result for an hour to reduce database reads
-def get_person_data_from_firebase_db(person_name):
-    """Fetches biographical data for a person from Firebase Realtime Database."""
+def get_person_biographical_data(person_name):
+    """Fetches biographical data for a given person from Firebase Realtime Database."""
+    ref = db.reference('people').child(person_name)
     try:
-        ref = db.reference(f'people/{person_name}')
         data = ref.get()
         return data
     except Exception as e:
-        st.warning(f"Could not retrieve biographical data for {person_name} from database: {e}")
+        st.error(f"❌ Error fetching biographical data for {person_name}: {e}")
         return None
 
 # --- Feature Extraction Function ---
@@ -336,20 +337,21 @@ def load_trained_model():
 
 # --- Speaker Recognition Functions ---
 
-def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer):
+def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer, sample_rate):
     """
-    Recognizes a speaker from an audio source (BytesIO buffer).
-    Returns the predicted speaker name or None if recognition fails.
+    Recognizes a speaker from an audio source (BytesIO buffer) and sample rate.
+    This is a unified function for both file uploads and live recordings.
     """
     if model is None or id_to_label is None:
-        return None, "Not Available (Model not loaded)"
+        return "Not Available (Model not loaded)"
 
     with st.spinner("Extracting features and predicting..."):
-        audio_source_buffer.seek(0) 
+        # Reset buffer position to the beginning before passing to librosa
+        audio_source_buffer.seek(0)
         features = extract_features(audio_source_buffer)
 
     if features is None:
-        return None, "Unknown Speaker (Feature Extraction Failed)"
+        return "Unknown Speaker (Feature Extraction Failed)"
 
     features = features.reshape(1, -1) # Reshape for prediction
 
@@ -359,7 +361,21 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer)
     probabilities = model.predict_proba(features)[0]
     confidence = probabilities[prediction_id] * 100
 
-    return predicted_speaker, confidence
+    st.write(f"Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
+
+    # Fetch and display biographical data
+    biographical_data = get_person_biographical_data(predicted_speaker)
+    if biographical_data:
+        st.subheader(f"Biographical Data for {predicted_speaker}:")
+        st.write(f"**Age:** {biographical_data.get('age', 'N/A')}")
+        st.write(f"**Height:** {biographical_data.get('height', 'N/A')}")
+        st.write(f"**Industry:** {biographical_data.get('industry', 'N/A')}")
+        st.write(f"**Total Films:** {biographical_data.get('total_films', 'N/A')}")
+        st.write(f"**Hit Films:** {biographical_data.get('hit_films', 'N/A')}")
+    else:
+        st.info(f"No biographical data found for {predicted_speaker}.")
+
+    return predicted_speaker
 
 # --- Streamlit UI Layout ---
 
@@ -382,7 +398,7 @@ try:
         st.error("Firebase 'database_url' not found in secrets. Please add it to your .streamlit/secrets.toml file.")
         st.stop()
 except KeyError as e:
-    st.error(f"Credential or Firebase secrets not found: {e}. Please ensure 'user_username', 'user_password', 'admin_username', 'admin_password', and 'firebase.database_url' are set in your .streamlit/secrets.toml file or Streamlit Cloud secrets.")
+    st.error(f"Credential or Firebase secrets not found: {e}. Please ensure 'user_username', 'user_password', 'admin_username', 'admin_password', and 'firebase.database.url' are set in your .streamlit/secrets.toml file or Streamlit Cloud secrets.")
     st.stop()
 
 
@@ -399,12 +415,12 @@ def logout():
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
     # Ensure all actor/actress form state is reset
-    st.session_state['person_name_input_combined'] = ''
-    st.session_state['actor_age_input'] = 25 # Reset to default
-    st.session_state['actor_height_input'] = ''
-    st.session_state['actor_industry_input'] = ''
-    st.session_state['actor_total_films_input'] = 0
-    st.session_state['actor_hit_films_input'] = 0
+    if 'person_name_input_combined' in st.session_state: st.session_state['person_name_input_combined'] = ''
+    if 'actor_age_input' in st.session_state: st.session_state['actor_age_input'] = 25 # Reset to default
+    if 'actor_height_input' in st.session_state: st.session_state['actor_height_input'] = ''
+    if 'actor_industry_input' in st.session_state: st.session_state['actor_industry_input'] = ''
+    if 'actor_total_films_input' in st.session_state: st.session_state['actor_total_films_input'] = 0
+    if 'actor_hit_films_input' in st.session_state: st.session_state['actor_hit_films_input'] = 0
 
 def set_login_mode(mode):
     st.session_state.login_mode = mode
@@ -422,6 +438,7 @@ if st.session_state.logged_in_as:
             st.session_state.user_mode = user_mode # Store this in session state if needed elsewhere
         elif st.session_state.logged_in_as == 'admin':
             st.header("Admin Options")
+            # Removed "Add New Actor/Actress Data" as a separate radio option
             admin_mode = st.radio("Choose Admin Action", ["Add/Manage Person Data & Voice Samples", "Retrain Model (Manual)"])
             st.session_state.admin_mode = admin_mode # Store this in session state if needed elsewhere
 
@@ -530,6 +547,7 @@ if st.session_state.logged_in_as is None:
         
     elif st.session_state.login_mode in ['user_login', 'admin_login']: # Specific login form
         role = "User" if st.session_state.login_mode == 'user_login' else "Admin"
+        st.write(f"Please log in as **{role}**.")
 
         with st.container(border=True): # Use a container with a border for visual grouping
             st.markdown(f"<h3 style='text-align: center;'>{role} Login</h3>", unsafe_allow_html=True)
@@ -566,23 +584,6 @@ elif st.session_state.logged_in_as == 'user':
     # user_mode is now read from st.session_state
     user_mode = st.session_state.get('user_mode', "Recognize Speaker from File")
 
-    # Define a helper function to display biographical data
-    def display_biographical_data(person_name):
-        if person_name not in ["Not Available (Model not loaded)", "Unknown Speaker (Feature Extraction Failed)"]:
-            bio_data = get_person_data_from_firebase_db(person_name)
-            if bio_data:
-                st.subheader(f"Biographical Data for {person_name}")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Age:** {bio_data.get('age', 'N/A')}")
-                    st.write(f"**Height:** {bio_data.get('height', 'N/A')}")
-                    st.write(f"**Industry:** {bio_data.get('industry', 'N/A')}")
-                with col2:
-                    st.write(f"**Total Films:** {bio_data.get('total_films', 'N/A')}")
-                    st.write(f"**Hit Films:** {bio_data.get('hit_films', 'N/A')}")
-            else:
-                st.info(f"No biographical data found for {person_name}.")
-
     if user_mode == "Recognize Speaker from File":
         st.header("🔍 Recognize Speaker from a File")
         if trained_model is None:
@@ -596,13 +597,9 @@ elif st.session_state.logged_in_as == 'user':
                 audio_buffer = io.BytesIO(uploaded_file.getvalue())
                 
                 st.write("Analyzing uploaded file...")
-                predicted_speaker, confidence = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer)
-                
-                if predicted_speaker:
-                    st.success(f"File analysis complete. Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
-                    display_biographical_data(predicted_speaker)
-                else:
-                    st.warning("Could not identify speaker.")
+                # Call recognize_speaker_from_audio_source which now displays bio data
+                recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
+                # st.success(f"File analysis complete. Predicted Speaker: **{recognized_speaker}**") # Removed as it's now handled inside the function
 
     elif user_mode == "Recognize Speaker Live":
         st.header("🎤 Recognize Speaker from Live Microphone Input")
@@ -620,13 +617,9 @@ elif st.session_state.logged_in_as == 'user':
                 audio_buffer = io.BytesIO(wav_audio_data)
                 
                 st.write("Analyzing live recording...")
-                predicted_speaker, confidence = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer)
-                
-                if predicted_speaker:
-                    st.success(f"Live analysis complete. Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
-                    display_biographical_data(predicted_speaker)
-                else:
-                    st.warning("Could not identify speaker.")
+                # Call recognize_speaker_from_audio_source which now displays bio data
+                recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
+                # st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**") # Removed as it's now handled inside the function
 
 # --- Admin Section ---
 elif st.session_state.logged_in_as == 'admin':
@@ -640,44 +633,57 @@ elif st.session_state.logged_in_as == 'admin':
         st.header("➕ Add/Manage Person Data & Voice Samples")
         st.write("Enter details and record voice samples for a new or existing person.")
 
-        with st.form("person_data_form"):
-            person_name = st.text_input("Person's Name (for voice and biographical data):", key="person_name_input_combined").strip()
+        # Initialize session state for recording if not already present
+        if 'recorded_samples_count' not in st.session_state:
+            st.session_state.recorded_samples_count = 0
+            st.session_state.temp_audio_files = [] # Store paths of locally saved temp files
+            st.session_state.current_sample_processed = False # New state for managing flow
 
-            st.markdown("---")
-            st.subheader("Biographical Data (Actors/Actresses)")
-            st.write("Enter additional details for this person. These will be stored in the database.")
-            
-            # Use get() for form values to ensure they are retrieved from session state on form reset
-            actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
-            actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
-            actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
-            actor_total_films = st.number_input("Total Films", min_value=0, value=st.session_state.get('actor_total_films_input', 0), step=1, key="actor_total_films_input")
-            actor_hit_films = st.number_input("Hit Films", min_value=0, value=st.session_state.get('actor_hit_films_input', 0), step=1, key="actor_hit_films_input")
+        # Use a container for the form inputs for better visual grouping
+        with st.container(border=True):
+            with st.form("person_data_form_inputs", clear_on_submit=False): # separate form for just the inputs
+                person_name = st.text_input("Person's Name (for voice and biographical data):", key="person_name_input_combined").strip()
 
-            st.markdown("---")
-            st.subheader("Voice Samples for Recognition")
-            st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{person_name if person_name else '[Enter Name Above]'}**, each {DEFAULT_DURATION} seconds long.")
-            st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
-
-            # Audio recording section moved into the form
-            if 'recorded_samples_count' not in st.session_state:
-                st.session_state.recorded_samples_count = 0
-                st.session_state.temp_audio_files = [] # Store paths of locally saved temp files
-                st.session_state.current_sample_processed = False # New state for managing flow
-
-            if st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
-                st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
+                st.markdown("---")
+                st.subheader("Biographical Data (Actors/Actresses)")
+                st.write("Enter additional details for this person. These will be stored in the database.")
                 
-                if not st.session_state.current_sample_processed:
-                    wav_audio_data = st_audiorec()
+                # Initialize values from session state for persistence
+                actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
+                actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
+                actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
+                actor_total_films = st.number_input("Total Films", min_value=0, value=st.session_state.get('actor_total_films_input', 0), step=1, key="actor_total_films_input")
+                actor_hit_films = st.number_input("Hit Films", min_value=0, value=st.session_state.get('actor_hit_films_input', 0), step=1, key="actor_hit_films_input")
+                
+                # A dummy submit button is needed for a form, but we'll use a separate one outside for the main action
+                st.form_submit_button("Update Biographical Data (Optional - doesn't save voice)", disabled=True) # This button will not trigger main save
 
-                    if wav_audio_data is not None:
-                        st.audio(wav_audio_data, format='audio/wav')
-                        
-                        # Process the recorded audio
+
+        st.markdown("---")
+        st.subheader("Voice Samples for Recognition")
+        st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{st.session_state.get('person_name_input_combined', '[Enter Name Above]')}**, each {DEFAULT_DURATION} seconds long.")
+        st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
+
+        # --- Voice Recording Section (Moved Outside the main data form) ---
+        if st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
+            st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
+            
+            if not st.session_state.current_sample_processed:
+                wav_audio_data = st_audiorec()
+
+                if wav_audio_data is not None:
+                    # Check if person_name is available before saving
+                    person_name_for_save = st.session_state.get('person_name_input_combined', '').strip()
+                    if not person_name_for_save:
+                        st.error("Please enter the Person's Name above before recording samples.")
+                        # Reset component state if name is missing
+                        st.session_state.current_sample_processed = False
+                        # We might need a mechanism to force st_audiorec to reset visually here.
+                        # For now, relying on user to input name then re-record.
+                    else:
                         with st.spinner("Processing recorded sample..."):
                             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                            local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.recorded_samples_count + 1}_{timestamp}.wav")
+                            local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name_for_save}_sample_{st.session_state.recorded_samples_count + 1}_{timestamp}.wav")
                             
                             with open(local_filename, "wb") as f:
                                 f.write(wav_audio_data)
@@ -687,68 +693,80 @@ elif st.session_state.logged_in_as == 'admin':
                             st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
                             st.session_state.current_sample_processed = True # Mark as processed
                             st.rerun() # Rerun to advance to the "Next Sample" button immediately
+            
+            # This "Next Sample" button is now outside the form, resolving the error
+            if st.session_state.current_sample_processed:
+                if st.button(f"Next Sample ({st.session_state.recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)"):
+                    st.session_state.current_sample_processed = False # Reset for next recording
+                    st.rerun() # Rerun to display the recorder for the next sample
                 else:
-                    if st.button(f"Next Sample ({st.session_state.recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)"):
-                        st.session_state.current_sample_processed = False # Reset for next recording
-                        st.rerun() # Rerun to display the recorder for the next sample
+                    st.info(f"Sample {st.session_state.recorded_samples_count} collected. Click 'Next Sample' to continue.")
+        else: # All samples collected
+            st.success(f"All {DEFAULT_NUM_SAMPLES} samples collected. You can now save all data.")
+
+
+        # --- Main Save Button (Outside the initial input form) ---
+        st.markdown("---")
+        # Ensure the main "Save All Data" button is also outside the sub-form if it's there.
+        # It needs to collect data from multiple input widgets.
+        if st.button("Save All Data & Retrain Model (Includes Bio Data and Voice Samples)"):
+            person_name = st.session_state.get('person_name_input_combined', '').strip()
+            actor_age = st.session_state.get('actor_age_input')
+            actor_height = st.session_state.get('actor_height_input')
+            actor_industry = st.session_state.get('actor_industry_input')
+            actor_total_films = st.session_state.get('actor_total_films_input')
+            actor_hit_films = st.session_state.get('actor_hit_films_input')
+
+            if not person_name:
+                st.error("Please enter the Person's Name.")
+            elif st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
+                st.error(f"Please record all {DEFAULT_NUM_SAMPLES} voice samples before saving data.")
+            elif not (person_name and actor_industry): # Basic validation for biographical data
+                 st.error("Please fill in Name and Industry fields for biographical data.")
+            else:
+                with st.spinner("Saving all data to Firebase and retraining model..."):
+                    # 1. Save biographical data to Realtime Database
+                    bio_data_saved = add_person_data_to_firebase_db(
+                        person_name, actor_age, actor_height, actor_industry, actor_total_films, actor_hit_films
+                    )
+
+                    # 2. Upload voice samples to Storage
+                    uploaded_count = 0
+                    for local_file_path in st.session_state.temp_audio_files:
+                        firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
+                        if upload_audio_to_firebase(local_file_path, firebase_path):
+                            uploaded_count += 1
+                        os.remove(local_file_path) # Clean up local temp file
+
+                    st.info(f"{uploaded_count} voice samples uploaded for {person_name}.")
+
+                    if bio_data_saved and uploaded_count == DEFAULT_NUM_SAMPLES:
+                        st.success(f"All data for {person_name} saved successfully!")
+
+                        # Clear caches to ensure new data is loaded for training
+                        load_data_from_firebase.clear()
+                        train_and_save_model.clear()
+                        load_trained_model.clear()
+
+                        # Reset form state for next entry
+                        st.session_state.recorded_samples_count = 0
+                        st.session_state.temp_audio_files = []
+                        st.session_state.current_sample_processed = False
+                        st.session_state['person_name_input_combined'] = ''
+                        st.session_state['actor_age_input'] = 25
+                        st.session_state['actor_height_input'] = ''
+                        st.session_state['actor_industry_input'] = ''
+                        st.session_state['actor_total_films_input'] = 0
+                        st.session_state['actor_hit_films_input'] = 0
+
+                        st.rerun() # Rerun to clear the form and reflect changes
                     else:
-                        st.info(f"Sample {st.session_state.recorded_samples_count} collected. Click 'Next Sample' to continue.")
+                        st.error("There was an issue saving all data. Please check messages above.")
+        else: # When form is not submitted, and name is empty, clear voice recording state
+            # This logic needs to be careful not to trigger reruns unnecessarily.
+            # Best to rely on the explicit "Next Sample" and "Save All Data" buttons.
+            pass
 
-            # Submit button for the entire form (voice samples must be collected first)
-            submitted_combined_data = st.form_submit_button("Save All Data & Retrain Model")
-
-            if submitted_combined_data:
-                # Basic validation for form submission
-                if not person_name:
-                    st.error("Please enter the Person's Name.")
-                elif st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
-                    st.error(f"Please record all {DEFAULT_NUM_SAMPLES} voice samples before saving data.")
-                else:
-                    with st.spinner("Saving all data to Firebase and retraining model..."):
-                        # 1. Save biographical data to Realtime Database
-                        bio_data_saved = add_person_data_to_firebase_db(
-                            person_name, actor_age, actor_height, actor_industry, actor_total_films, actor_hit_films
-                        )
-
-                        # 2. Upload voice samples to Storage
-                        uploaded_count = 0
-                        for local_file_path in st.session_state.temp_audio_files:
-                            firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
-                            if upload_audio_to_firebase(local_file_path, firebase_path):
-                                uploaded_count += 1
-                            os.remove(local_file_path) # Clean up local temp file
-
-                        st.info(f"{uploaded_count} voice samples uploaded for {person_name}.")
-
-                        if bio_data_saved and uploaded_count == DEFAULT_NUM_SAMPLES:
-                            st.success(f"All data for {person_name} saved successfully!")
-
-                            # Clear caches to ensure new data is loaded for training
-                            load_data_from_firebase.clear()
-                            train_and_save_model.clear()
-                            load_trained_model.clear()
-                            get_person_data_from_firebase_db.clear() # New: Clear the DB data cache
-
-                            # Reset form state for next entry
-                            st.session_state.recorded_samples_count = 0
-                            st.session_state.temp_audio_files = []
-                            st.session_state.current_sample_processed = False
-                            st.session_state['person_name_input_combined'] = ''
-                            st.session_state['actor_age_input'] = 25
-                            st.session_state['actor_height_input'] = ''
-                            st.session_state['actor_industry_input'] = ''
-                            st.session_state['actor_total_films_input'] = 0
-                            st.session_state['actor_hit_films_input'] = 0
-
-                            st.rerun() # Rerun to clear the form and reflect changes
-                        else:
-                            st.error("There was an issue saving all data. Please check messages above.")
-            else: # When form is not submitted, and name is empty, clear voice recording state
-                if not person_name and 'recorded_samples_count' in st.session_state and st.session_state.recorded_samples_count > 0:
-                    st.session_state.recorded_samples_count = 0
-                    st.session_state.temp_audio_files = []
-                    st.session_state.current_sample_processed = False
-                    st.rerun() # Rerun to clear the recording section if name is blanked out
 
     elif admin_mode == "Retrain Model (Manual)":
         st.header("🔄 Manually Retrain Model")
@@ -758,6 +776,6 @@ elif st.session_state.logged_in_as == 'admin':
             load_data_from_firebase.clear() # Clear data cache to ensure fresh load
             train_and_save_model.clear() # Clear model cache to force retraining
             load_trained_model.clear() # Clear loaded model cache to pick up new model
-            get_person_data_from_firebase_db.clear() # New: Clear the DB data cache
             
+            # After clearing caches, Streamlit's natural rerun will pick up changes.
             st.rerun() # Keep this rerun to refresh the page after training is complete.
