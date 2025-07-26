@@ -330,16 +330,21 @@ st.set_page_config(page_title="Speaker Recognition", layout="centered", initial_
 if 'logged_in_as' not in st.session_state:
     st.session_state.logged_in_as = None
 
+# Load credentials from Streamlit secrets
+try:
+    USER_USERNAME = st.secrets["credentials"]["user_username"]
+    USER_PASSWORD = st.secrets["credentials"]["user_password"]
+    ADMIN_USERNAME = st.secrets["credentials"]["admin_username"]
+    ADMIN_PASSWORD = st.secrets["credentials"]["admin_password"]
+except KeyError:
+    st.error("Credential secrets not found. Please ensure 'user_username', 'user_password', 'admin_username', and 'admin_password' are set in your .streamlit/secrets.toml file or Streamlit Cloud secrets.")
+    st.stop()
+
+
 # Load model at the start (cached) - this will happen only once unless caches are cleared
 trained_model, id_to_label_map = load_trained_model()
 
 # --- Callback Functions for Login/Logout ---
-def set_user_login():
-    st.session_state.logged_in_as = 'user'
-
-def set_admin_login():
-    st.session_state.logged_in_as = 'admin'
-
 def logout():
     """Resets the login state and clears relevant session variables."""
     st.session_state.logged_in_as = None
@@ -347,6 +352,7 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
+    st.rerun() # Rerun to go back to login page after logout
 
 # Display Logout button if logged in
 if st.session_state.logged_in_as:
@@ -372,10 +378,16 @@ if st.session_state.logged_in_as is None:
             text-align: center;
             padding-bottom: 20px; /* Add some padding at the bottom if needed */
         }
-        .login-buttons {
-            display: flex;
-            gap: 20px; /* Space between buttons */
-            margin-top: 30px;
+        .login-form {
+            width: 80%;
+            max-width: 400px;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: #f9f9f9;
+        }
+        .stTextInput label, .stNumberInput label {
+            font-weight: bold;
         }
         .stButton button {
             background-color: #4CAF50; /* Green */
@@ -390,6 +402,7 @@ if st.session_state.logged_in_as is None:
             border-radius: 8px;
             border: none;
             transition-duration: 0.4s;
+            width: 100%; /* Make login buttons full width */
         }
         .stButton button:hover {
             background-color: #45a049;
@@ -403,15 +416,33 @@ if st.session_state.logged_in_as is None:
     
     st.image("sso_logo.png", width=150) 
     
-    st.markdown("## SSO Consultants Voice Recognser") 
-    st.write("Please choose your login type.")
+    st.markdown("## SSO Consultants Voice Recognizer") 
+    st.write("Please log in to continue.")
 
-    col1, col2 = st.columns([1, 1]) # Create two columns for buttons
+    # Create a login form container
+    with st.container(border=True): # Use a container with a border for visual grouping
+        st.markdown("<h3 style='text-align: center;'>Login</h3>", unsafe_allow_html=True)
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
 
-    with col1:
-        st.button("Login as User", key="login_user", on_click=set_user_login)
-    with col2:
-        st.button("Login as Admin", key="login_admin", on_click=set_admin_login)
+        col1, col2 = st.columns(2) # Two columns for login buttons
+
+        with col1:
+            if st.button("Login as User", key="submit_user_login"):
+                if username == USER_USERNAME and password == USER_PASSWORD:
+                    st.session_state.logged_in_as = 'user'
+                    st.success("Logged in as User!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password for User access.")
+        with col2:
+            if st.button("Login as Admin", key="submit_admin_login"):
+                if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+                    st.session_state.logged_in_as = 'admin'
+                    st.success("Logged in as Admin!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password for Admin access.")
             
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
