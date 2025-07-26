@@ -406,7 +406,7 @@ def set_login_mode(mode):
 # This block will now handle sidebar content, including the logo and logout button
 if st.session_state.logged_in_as:
     with st.sidebar:
-        st.image("sso_logo.png", width=100) # Display logo at the top of the sidebar
+        st.image("sso_logo.png", width=150) # Display logo at the top of the sidebar
         st.markdown("---") # Separator
 
         if st.session_state.logged_in_as == 'user':
