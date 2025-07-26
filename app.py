@@ -97,6 +97,7 @@ if not initialize_firebase_app():
     st.stop() # Stop the app if Firebase cannot be initialized
 
 # Get Firebase services from session state
+firebase_app = st.session_state.firebase_app
 firebase_db = st.session_state.firebase_db
 firebase_auth = st.session_state.firebase_auth
 
