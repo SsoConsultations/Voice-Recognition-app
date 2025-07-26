@@ -416,16 +416,21 @@ def logout():
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
     
     # Reset the value control for the person's name input
-    # Check if the control variable exists before trying to delete/reset
     if 'person_name_input_value_control' in st.session_state:
         st.session_state['person_name_input_value_control'] = '' 
 
-    # Ensure all actor/actress form state is reset
-    if 'actor_age_input' in st.session_state: st.session_state['actor_age_input'] = 25 # Reset to default
-    if 'actor_height_input' in st.session_state: st.session_state['actor_height_input'] = ''
-    if 'actor_industry_input' in st.session_state: st.session_state['actor_industry_input'] = ''
-    if 'actor_total_films_input' in st.session_state: st.session_state['actor_total_films_input'] = 0
-    if 'actor_hit_films_input' in st.session_state: st.session_state['actor_hit_films_input'] = 0
+    # Corrected: Delete the session state key for actor_age_input
+    # This ensures the default value from st.number_input's 'value' param is used on next run
+    if 'actor_age_input' in st.session_state:
+        del st.session_state['actor_age_input'] 
+    if 'actor_height_input' in st.session_state:
+        del st.session_state['actor_height_input']
+    if 'actor_industry_input' in st.session_state:
+        del st.session_state['actor_industry_input']
+    if 'actor_total_films_input' in st.session_state:
+        del st.session_state['actor_total_films_input']
+    if 'actor_hit_films_input' in st.session_state:
+        del st.session_state['actor_hit_films_input']
 
     st.rerun() # Rerun to go back to login page after logout
 
@@ -649,6 +654,13 @@ elif st.session_state.logged_in_as == 'admin':
             st.session_state.current_sample_processed = False # New state for managing flow
             # Initialize control variable for text input value
             st.session_state.person_name_input_value_control = '' 
+            # Initialize other input control variables if they don't have default `value` parameters
+            # For number inputs, their key directly reflects their value, so `del` is fine.
+            # For text inputs, it's safer to have a value control variable if you need to reset them.
+            if 'actor_height_input_value_control' not in st.session_state:
+                st.session_state.actor_height_input_value_control = ''
+            if 'actor_industry_input_value_control' not in st.session_state:
+                st.session_state.actor_industry_input_value_control = ''
 
         # Use a container for the form inputs for better visual grouping
         with st.container(border=True):
@@ -656,7 +668,7 @@ elif st.session_state.logged_in_as == 'admin':
             person_name = st.text_input(
                 "Person's Name (for voice and biographical data):", 
                 value=st.session_state.person_name_input_value_control, # Controlled by session state
-                key="person_name_input_combined" # This key is for the widget's internal state, not for direct modification
+                key="person_name_input_combined" # This key is for the widget's internal state
             ).strip()
             
             # Immediately update the value control if the user changes the input
@@ -668,9 +680,24 @@ elif st.session_state.logged_in_as == 'admin':
             st.write("Enter additional details for this person. These will be stored in the database.")
             
             # Initialize values from session state for persistence
+            # For number inputs, their key directly reflects their value, so `del` is fine for reset.
             actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
-            actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
-            actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
+            
+            # For text inputs, use value control variables
+            actor_height = st.text_input(
+                "Height (e.g., 5'10\" or 178cm)", 
+                value=st.session_state.get('actor_height_input_value_control', ''), 
+                key="actor_height_input"
+            )
+            st.session_state.actor_height_input_value_control = actor_height
+
+            actor_industry = st.text_input(
+                "Industry (e.g., Bollywood, Hollywood)", 
+                value=st.session_state.get('actor_industry_input_value_control', ''), 
+                key="actor_industry_input"
+            )
+            st.session_state.actor_industry_input_value_control = actor_industry
+
             actor_total_films = st.number_input("Total Films", min_value=0, value=st.session_state.get('actor_total_films_input', 0), step=1, key="actor_total_films_input")
             actor_hit_films = st.number_input("Hit Films", min_value=0, value=st.session_state.get('actor_hit_films_input', 0), step=1, key="actor_hit_films_input")
 
@@ -724,8 +751,8 @@ elif st.session_state.logged_in_as == 'admin':
         if st.button("Save All Data & Retrain Model (Includes Bio Data and Voice Samples)"):
             person_name = st.session_state.person_name_input_value_control.strip() # Use the value control variable
             actor_age = st.session_state.get('actor_age_input')
-            actor_height = st.session_state.get('actor_height_input')
-            actor_industry = st.session_state.get('actor_industry_input')
+            actor_height = st.session_state.get('actor_height_input_value_control') # Use value control
+            actor_industry = st.session_state.get('actor_industry_input_value_control') # Use value control
             actor_total_films = st.session_state.get('actor_total_films_input')
             actor_hit_films = st.session_state.get('actor_hit_films_input')
 
@@ -765,11 +792,15 @@ elif st.session_state.logged_in_as == 'admin':
                         st.session_state.temp_audio_files = []
                         st.session_state.current_sample_processed = False
                         st.session_state.person_name_input_value_control = '' # Reset the control variable for the text input
-                        st.session_state['actor_age_input'] = 25
-                        st.session_state['actor_height_input'] = ''
-                        st.session_state['actor_industry_input'] = ''
-                        st.session_state['actor_total_films_input'] = 0
-                        st.session_state['actor_hit_films_input'] = 0
+                        
+                        # Use del for number inputs, as their value is directly tied to the key
+                        if 'actor_age_input' in st.session_state: del st.session_state['actor_age_input']
+                        if 'actor_total_films_input' in st.session_state: del st.session_state['actor_total_films_input']
+                        if 'actor_hit_films_input' in st.session_state: del st.session_state['actor_hit_films_input']
+
+                        # Reset control variables for text inputs
+                        st.session_state.actor_height_input_value_control = ''
+                        st.session_state.actor_industry_input_value_control = ''
 
                         st.rerun() # Rerun to clear the form and reflect changes
                     else:
