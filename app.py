@@ -403,7 +403,7 @@ if st.session_state.logged_in_as is None:
     
     st.image("sso_logo.png", width=150) 
     
-    st.markdown("## SSO Consultants Voice Recognition Model") 
+    st.markdown("## SSO Consultants Voice Recognser") 
     st.write("Please choose your login type.")
 
     col1, col2 = st.columns([1, 1]) # Create two columns for buttons
@@ -538,7 +538,6 @@ elif st.session_state.logged_in_as == 'admin':
                 else:
                     st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
         else:
-            st.info("Please enter a person's name to start recording samples.")
             # Reset session state if name is cleared
             if 'recorded_samples_count' in st.session_state:
                 del st.session_state.recorded_samples_count
