@@ -355,13 +355,34 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
+    st.rerun() # Rerun to go back to login page after logout
 
 def set_login_mode(mode):
     st.session_state.login_mode = mode
+    st.rerun() # Rerun to display the login form
 
-# Display Logout button if logged in
+# --- Sidebar Content ---
+# This block will now handle sidebar content, including the logo and logout button
 if st.session_state.logged_in_as:
-    st.sidebar.button("Logout", on_click=logout)
+    with st.sidebar:
+        st.image("sso_logo.png", width=100) # Display logo at the top of the sidebar
+        st.markdown("---") # Separator
+
+        if st.session_state.logged_in_as == 'user':
+            st.header("User Options")
+            user_mode = st.radio("Choose Recognition Method", ["Recognize Speaker from File", "Recognize Speaker Live"])
+            st.session_state.user_mode = user_mode # Store this in session state if needed elsewhere
+        elif st.session_state.logged_in_as == 'admin':
+            st.header("Admin Options")
+            admin_mode = st.radio("Choose Admin Action", ["Add New Speaker Data", "Retrain Model (Manual)"])
+            st.session_state.admin_mode = admin_mode # Store this in session state if needed elsewhere
+
+        # Using a spacer to push the logout button to the bottom
+        st.markdown("<div style='position: fixed; bottom: 0; width: 200px; padding-bottom: 20px;'>", unsafe_allow_html=True)
+        st.button("Logout", on_click=logout)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# --- Main Page Content ---
 
 # --- Login Page (Initial Role Selection or Specific Login Form) ---
 if st.session_state.logged_in_as is None:
@@ -424,6 +445,23 @@ if st.session_state.logged_in_as is None:
         .back-button:hover {
             background-color: #da190b;
         }
+        /* Style for the sidebar container to ensure proper positioning of the fixed logout button */
+        [data-testid="stSidebar"] {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* Pushes content apart */
+            padding-bottom: 0 !important; /* Remove default padding that might interfere */
+        }
+        [data-testid="stSidebarContent"] {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1; /* Allow content to grow and push the fixed element down */
+        }
+        /* Ensure the fixed element is constrained within the sidebar */
+        [data-testid="stSidebar"] .fixed-bottom-spacer {
+            margin-top: auto; /* Pushes this element to the bottom if content above allows */
+            padding-top: 20px; /* Space above logout button */
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -431,7 +469,7 @@ if st.session_state.logged_in_as is None:
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
     
-    # Conditionally display logo and main title
+    # Conditionally display logo and main title for the initial role selection
     if st.session_state.login_mode is None:
         st.image("sso_logo.png", width=150) 
         st.markdown("## SSO Consultants Voice Recognizer") 
@@ -444,6 +482,7 @@ if st.session_state.logged_in_as is None:
         
     elif st.session_state.login_mode in ['user_login', 'admin_login']: # Specific login form
         role = "User" if st.session_state.login_mode == 'user_login' else "Admin"
+        st.write(f"Please log in as **{role}**.")
 
         with st.container(border=True): # Use a container with a border for visual grouping
             st.markdown(f"<h3 style='text-align: center;'>{role} Login</h3>", unsafe_allow_html=True)
@@ -467,7 +506,7 @@ if st.session_state.logged_in_as is None:
                         st.error("Invalid username or password for Admin access.")
             
             # Back button to return to role selection
-            st.button("Back to home page", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
+            st.button("← Back to Role Selection", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
 
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -477,8 +516,8 @@ elif st.session_state.logged_in_as == 'user':
     st.title("🗣️ User Portal: Recognize Speaker")
     st.markdown("---")
     
-    st.sidebar.header("User Options")
-    user_mode = st.sidebar.radio("Choose Recognition Method", ["Recognize Speaker from File", "Recognize Speaker Live"])
+    # user_mode is now read from st.session_state
+    user_mode = st.session_state.get('user_mode', "Recognize Speaker from File")
 
     if user_mode == "Recognize Speaker from File":
         st.header("🔍 Recognize Speaker from a File")
@@ -520,8 +559,8 @@ elif st.session_state.logged_in_as == 'admin':
     st.title("⚙️ Admin Portal: Manage Speaker Data")
     st.markdown("---")
 
-    st.sidebar.header("Admin Options")
-    admin_mode = st.sidebar.radio("Choose Admin Action", ["Add New Speaker Data", "Retrain Model (Manual)"])
+    # admin_mode is now read from st.session_state
+    admin_mode = st.session_state.get('admin_mode', "Add New Speaker Data")
 
     if admin_mode == "Add New Speaker Data":
         st.header("➕ Add/Record New Speaker Voice Data")
