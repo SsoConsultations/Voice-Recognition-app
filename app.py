@@ -45,10 +45,18 @@ N_MFCC = 13 # Number of MFCCs to extract
 
 # --- Canvas Environment Variables (Provided by Canvas) ---
 # These variables are automatically injected by the Canvas environment.
-# DO NOT remove or modify these lines.
-app_id = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'
-firebase_config = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}')
-initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : ''
+# They are Python variables, so use 'locals().get()' to check for existence and provide fallbacks.
+app_id = locals().get('__app_id', 'default-app-id')
+firebase_config_str = locals().get('__firebase_config', '{}') # Get as string first
+initial_auth_token = locals().get('__initial_auth_token', '')
+
+# Parse firebase_config string into a dictionary
+try:
+    firebase_config = json.loads(firebase_config_str)
+except json.JSONDecodeError:
+    st.error("Error parsing __firebase_config. It's not valid JSON.")
+    st.stop()
+
 
 # --- Admin User IDs (Replace with actual UIDs of your admin users) ---
 # To find a user's UID: log in as that user, then check st.session_state.user_id
@@ -62,7 +70,7 @@ ADMIN_UIDS = [
 def initialize_firebase_app():
     if not firebase_admin._apps: # Check if Firebase app is already initialized
         try:
-            # Use the firebase_config provided by the Canvas environment
+            # Use the firebase_config (now a dict) provided by the Canvas environment
             app = firebase_admin.initialize_app(credentials.Certificate(firebase_config))
             db = storage.bucket(app=app) # Initialize storage bucket with the app
             fb_auth = auth.get_auth(app) # Initialize auth service
@@ -584,4 +592,3 @@ elif app_mode == "Recognize Speaker Live":
             st.write("Analyzing live recording...")
             recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
             st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
-
