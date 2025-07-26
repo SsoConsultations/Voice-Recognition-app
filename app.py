@@ -422,14 +422,17 @@ def logout():
     if 'actor_total_films_input' in st.session_state: st.session_state['actor_total_films_input'] = 0
     if 'actor_hit_films_input' in st.session_state: st.session_state['actor_hit_films_input'] = 0
 
+    st.rerun() # Rerun to go back to login page after logout
+
 def set_login_mode(mode):
     st.session_state.login_mode = mode
+    st.rerun() # Rerun to display the login form
 
 # --- Sidebar Content ---
 # This block will now handle sidebar content, including the logo and logout button
 if st.session_state.logged_in_as:
     with st.sidebar:
-        st.image("sso_logo.png", width=150) # Display logo at the top of the sidebar
+        st.image("sso_logo.png", width=100) # Display logo at the top of the sidebar
         st.markdown("---") # Separator
 
         if st.session_state.logged_in_as == 'user':
@@ -571,7 +574,7 @@ if st.session_state.logged_in_as is None:
                         st.error("Invalid username or password for Admin access.")
             
             # Back button to return to role selection
-            st.button("Back to home page", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
+            st.button("← Back to Role Selection", key="back_to_role_selection", on_click=lambda: set_login_mode(None), type="secondary")
 
     st.markdown('<p style="margin-top: 50px; font-size: 0.9em; color: grey;">SSO Consultants Voice Recognition Tool © 2025 | All Rights Reserved.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -641,60 +644,54 @@ elif st.session_state.logged_in_as == 'admin':
 
         # Use a container for the form inputs for better visual grouping
         with st.container(border=True):
-            with st.form("person_data_form_inputs", clear_on_submit=False): # separate form for just the inputs
-                person_name = st.text_input("Person's Name (for voice and biographical data):", key="person_name_input_combined").strip()
+            # No st.form here for inputs, so we can use regular buttons outside
+            person_name = st.text_input("Person's Name (for voice and biographical data):", key="person_name_input_combined").strip()
 
-                st.markdown("---")
-                st.subheader("Biographical Data (Actors/Actresses)")
-                st.write("Enter additional details for this person. These will be stored in the database.")
-                
-                # Initialize values from session state for persistence
-                actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
-                actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
-                actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
-                actor_total_films = st.number_input("Total Films", min_value=0, value=st.session_state.get('actor_total_films_input', 0), step=1, key="actor_total_films_input")
-                actor_hit_films = st.number_input("Hit Films", min_value=0, value=st.session_state.get('actor_hit_films_input', 0), step=1, key="actor_hit_films_input")
-                
-                # A dummy submit button is needed for a form, but we'll use a separate one outside for the main action
-                st.form_submit_button("Update Biographical Data (Optional - doesn't save voice)", disabled=True) # This button will not trigger main save
-
+            st.markdown("---")
+            st.subheader("Biographical Data (Actors/Actresses)")
+            st.write("Enter additional details for this person. These will be stored in the database.")
+            
+            # Initialize values from session state for persistence
+            actor_age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.get('actor_age_input', 25), step=1, key="actor_age_input")
+            actor_height = st.text_input("Height (e.g., 5'10\" or 178cm)", value=st.session_state.get('actor_height_input', ''), key="actor_height_input")
+            actor_industry = st.text_input("Industry (e.g., Bollywood, Hollywood)", value=st.session_state.get('actor_industry_input', ''), key="actor_industry_input")
+            actor_total_films = st.number_input("Total Films", min_value=0, value=st.session_state.get('actor_total_films_input', 0), step=1, key="actor_total_films_input")
+            actor_hit_films = st.number_input("Hit Films", min_value=0, value=st.session_state.get('actor_hit_films_input', 0), step=1, key="actor_hit_films_input")
 
         st.markdown("---")
         st.subheader("Voice Samples for Recognition")
         st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{st.session_state.get('person_name_input_combined', '[Enter Name Above]')}**, each {DEFAULT_DURATION} seconds long.")
         st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
 
-        # --- Voice Recording Section (Moved Outside the main data form) ---
+        # --- Voice Recording Section ---
+        # Ensure person_name_for_save is captured from session_state immediately
+        person_name_for_save = st.session_state.get('person_name_input_combined', '').strip()
+
         if st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
             st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
             
-            if not st.session_state.current_sample_processed:
-                wav_audio_data = st_audiorec()
-
+            # Conditionally display the audio recorder only if name is present and sample is not processed
+            if not person_name_for_save:
+                st.error("Please enter the Person's Name above before recording samples.")
+            elif not st.session_state.current_sample_processed:
+                wav_audio_data = st_audiorec(key=f"audiorec_{st.session_state.recorded_samples_count}") # Add a unique key
+                
                 if wav_audio_data is not None:
-                    # Check if person_name is available before saving
-                    person_name_for_save = st.session_state.get('person_name_input_combined', '').strip()
-                    if not person_name_for_save:
-                        st.error("Please enter the Person's Name above before recording samples.")
-                        # Reset component state if name is missing
-                        st.session_state.current_sample_processed = False
-                        # We might need a mechanism to force st_audiorec to reset visually here.
-                        # For now, relying on user to input name then re-record.
-                    else:
-                        with st.spinner("Processing recorded sample..."):
-                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                            local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name_for_save}_sample_{st.session_state.recorded_samples_count + 1}_{timestamp}.wav")
-                            
-                            with open(local_filename, "wb") as f:
-                                f.write(wav_audio_data)
-                            
-                            st.session_state.temp_audio_files.append(local_filename)
-                            st.session_state.recorded_samples_count += 1
-                            st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
-                            st.session_state.current_sample_processed = True # Mark as processed
-                            st.rerun() # Rerun to advance to the "Next Sample" button immediately
+                    # The name check is now done before even showing the recorder
+                    with st.spinner("Processing recorded sample..."):
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name_for_save}_sample_{st.session_state.recorded_samples_count + 1}_{timestamp}.wav")
+                        
+                        with open(local_filename, "wb") as f:
+                            f.write(wav_audio_data)
+                        
+                        st.session_state.temp_audio_files.append(local_filename)
+                        st.session_state.recorded_samples_count += 1
+                        st.success(f"Sample {st.session_state.recorded_samples_count} recorded and saved locally.")
+                        st.session_state.current_sample_processed = True # Mark as processed
+                        st.rerun() # Rerun to advance to the "Next Sample" button immediately
             
-            # This "Next Sample" button is now outside the form, resolving the error
+            # This "Next Sample" button is now outside the biographical data input 'form'
             if st.session_state.current_sample_processed:
                 if st.button(f"Next Sample ({st.session_state.recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)"):
                     st.session_state.current_sample_processed = False # Reset for next recording
@@ -705,10 +702,8 @@ elif st.session_state.logged_in_as == 'admin':
             st.success(f"All {DEFAULT_NUM_SAMPLES} samples collected. You can now save all data.")
 
 
-        # --- Main Save Button (Outside the initial input form) ---
+        # --- Main Save Button (Outside all forms for full control) ---
         st.markdown("---")
-        # Ensure the main "Save All Data" button is also outside the sub-form if it's there.
-        # It needs to collect data from multiple input widgets.
         if st.button("Save All Data & Retrain Model (Includes Bio Data and Voice Samples)"):
             person_name = st.session_state.get('person_name_input_combined', '').strip()
             actor_age = st.session_state.get('actor_age_input')
@@ -762,10 +757,7 @@ elif st.session_state.logged_in_as == 'admin':
                         st.rerun() # Rerun to clear the form and reflect changes
                     else:
                         st.error("There was an issue saving all data. Please check messages above.")
-        else: # When form is not submitted, and name is empty, clear voice recording state
-            # This logic needs to be careful not to trigger reruns unnecessarily.
-            # Best to rely on the explicit "Next Sample" and "Save All Data" buttons.
-            pass
+        # Removed the `else` block for name empty on submit, relying on explicit check above.
 
 
     elif admin_mode == "Retrain Model (Manual)":
