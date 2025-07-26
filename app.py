@@ -47,15 +47,17 @@ N_MFCC = 13 # Number of MFCCs to extract
 # These variables are automatically injected by the Canvas environment.
 # They are Python variables, so use 'locals().get()' to check for existence and provide fallbacks.
 app_id = locals().get('__app_id', 'default-app-id')
-firebase_config_str = locals().get('__firebase_config', '{}') # Get as string first
+# __firebase_config is typically a client-side config, not the service account JSON.
+# We will explicitly get the service account JSON from st.secrets for firebase-admin.
+# firebase_config_str = locals().get('__firebase_config', '{}') # No longer directly used for credentials.Certificate
 initial_auth_token = locals().get('__initial_auth_token', '')
 
-# Parse firebase_config string into a dictionary
-try:
-    firebase_config = json.loads(firebase_config_str)
-except json.JSONDecodeError:
-    st.error("Error parsing __firebase_config. It's not valid JSON.")
-    st.stop()
+# # Parse firebase_config string into a dictionary (removed as it's not the service account JSON)
+# try:
+#     firebase_config = json.loads(firebase_config_str)
+# except json.JSONDecodeError:
+#     st.error("Error parsing __firebase_config. It's not valid JSON.")
+#     st.stop()
 
 
 # --- Admin User IDs (Replace with actual UIDs of your admin users) ---
@@ -70,19 +72,31 @@ ADMIN_UIDS = [
 def initialize_firebase_app():
     if not firebase_admin._apps: # Check if Firebase app is already initialized
         try:
-            # Use the firebase_config (now a dict) provided by the Canvas environment
-            app = firebase_admin.initialize_app(credentials.Certificate(firebase_config))
+            # Explicitly get service account JSON string from Streamlit secrets
+            service_account_json_str = st.secrets["firebase"]["service_account_json"]
+            storage_bucket_name = st.secrets["firebase"]["storage_bucket"]
+
+            # Parse the JSON string into a dictionary
+            service_account_info = json.loads(service_account_json_str)
+            
+            # Initialize Firebase Admin SDK with the service account info
+            # This is the correct way to pass the service account JSON to firebase-admin
+            cred = credentials.Certificate(service_account_info)
+            app = firebase_admin.initialize_app(cred, {'storageBucket': storage_bucket_name})
+            
             db = storage.bucket(app=app) # Initialize storage bucket with the app
             fb_auth = auth.get_auth(app) # Initialize auth service
 
             st.session_state.firebase_app = app
             st.session_state.firebase_db = db
             st.session_state.firebase_auth = fb_auth
-            st.success("✅ Firebase initialized successfully.")
+            st.success("✅ Firebase initialized successfully from secrets.")
             return True
-        except Exception as e:
-            st.error(f"❌ Error initializing Firebase: {e}")
-            return False
+        except (KeyError, json.JSONDecodeError, Exception) as e:
+            # This fallback is for local development if secrets are not configured or invalid.
+            # For Canvas, secrets should always be present if configured.
+            st.error(f"❌ Error initializing Firebase from secrets: {e}. Please ensure your `.streamlit/secrets.toml` or Streamlit Cloud secrets are correctly configured.")
+            st.stop() # Stop the app if crucial Firebase init fails
     return True # Already initialized
 
 # Ensure temporary directory exists on startup
