@@ -414,12 +414,8 @@ def logout():
     if 'recorded_samples_count' in st.session_state: del st.session_state.recorded_samples_count
     if 'temp_audio_files' in st.session_state: del st.session_state.temp_audio_files
     if 'current_sample_processed' in st.session_state: del st.session_state.current_sample_processed
-    
-    # Reset the value control for the person's name input
-    if 'person_name_input_value_control' in st.session_state:
-        st.session_state['person_name_input_value_control'] = '' 
-
     # Ensure all actor/actress form state is reset
+    if 'person_name_input_combined' in st.session_state: st.session_state['person_name_input_combined'] = ''
     if 'actor_age_input' in st.session_state: st.session_state['actor_age_input'] = 25 # Reset to default
     if 'actor_height_input' in st.session_state: st.session_state['actor_height_input'] = ''
     if 'actor_industry_input' in st.session_state: st.session_state['actor_industry_input'] = ''
@@ -543,7 +539,7 @@ if st.session_state.logged_in_as is None:
     
     # Conditionally display logo and main title for the initial role selection
     if st.session_state.login_mode is None:
-        st.image("sso_logo.png", width=150) # Display SSO Consultants logo
+        st.image("sso_logo.png", width=150)
         st.markdown("## SSO Consultants Voice Recognizer")
         st.write("Please choose your login type to proceed.")
         col1, col2 = st.columns([1, 1])
@@ -616,8 +612,7 @@ elif st.session_state.logged_in_as == 'user':
         else:
             st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
             
-            # No 'key' argument needed for st_audiorec
-            wav_audio_data = st_audiorec() 
+            wav_audio_data = st_audiorec()
             
             if wav_audio_data is not None:
                 st.audio(wav_audio_data, format='audio/wav')
@@ -646,21 +641,11 @@ elif st.session_state.logged_in_as == 'admin':
             st.session_state.recorded_samples_count = 0
             st.session_state.temp_audio_files = [] # Store paths of locally saved temp files
             st.session_state.current_sample_processed = False # New state for managing flow
-            # Initialize control variable for text input value
-            st.session_state.person_name_input_value_control = '' 
 
         # Use a container for the form inputs for better visual grouping
         with st.container(border=True):
-            # Use the value parameter to control the text input's content
-            person_name = st.text_input(
-                "Person's Name (for voice and biographical data):", 
-                value=st.session_state.person_name_input_value_control, # Controlled by session state
-                key="person_name_input_combined" # This key is for the widget's internal state, not for direct modification
-            ).strip()
-            
-            # Immediately update the value control if the user changes the input
-            # This ensures that person_name_input_value_control reflects the current input
-            st.session_state.person_name_input_value_control = person_name
+            # No st.form here for inputs, so we can use regular buttons outside
+            person_name = st.text_input("Person's Name (for voice and biographical data):", key="person_name_input_combined").strip()
 
             st.markdown("---")
             st.subheader("Biographical Data (Actors/Actresses)")
@@ -675,12 +660,12 @@ elif st.session_state.logged_in_as == 'admin':
 
         st.markdown("---")
         st.subheader("Voice Samples for Recognition")
-        st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{st.session_state.person_name_input_value_control}**, each {DEFAULT_DURATION} seconds long.")
+        st.info(f"You need to record {DEFAULT_NUM_SAMPLES} samples for **{st.session_state.get('person_name_input_combined', '[Enter Name Above]')}**, each {DEFAULT_DURATION} seconds long.")
         st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
 
         # --- Voice Recording Section ---
         # Ensure person_name_for_save is captured from session_state immediately
-        person_name_for_save = st.session_state.person_name_input_value_control # Use the value control variable
+        person_name_for_save = st.session_state.get('person_name_input_combined', '').strip()
 
         if st.session_state.recorded_samples_count < DEFAULT_NUM_SAMPLES:
             st.subheader(f"Recording Sample {st.session_state.recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
@@ -689,8 +674,7 @@ elif st.session_state.logged_in_as == 'admin':
             if not person_name_for_save:
                 st.error("Please enter the Person's Name above before recording samples.")
             elif not st.session_state.current_sample_processed:
-                # No 'key' argument for st_audiorec
-                wav_audio_data = st_audiorec() 
+                wav_audio_data = st_audiorec() # REMOVED: key=f"audiorec_{st.session_state.recorded_samples_count}"
                 
                 if wav_audio_data is not None:
                     # The name check is now done before even showing the recorder
@@ -721,7 +705,7 @@ elif st.session_state.logged_in_as == 'admin':
         # --- Main Save Button (Outside all forms for full control) ---
         st.markdown("---")
         if st.button("Save All Data & Retrain Model (Includes Bio Data and Voice Samples)"):
-            person_name = st.session_state.person_name_input_value_control.strip() # Use the value control variable
+            person_name = st.session_state.get('person_name_input_combined', '').strip()
             actor_age = st.session_state.get('actor_age_input')
             actor_height = st.session_state.get('actor_height_input')
             actor_industry = st.session_state.get('actor_industry_input')
@@ -763,7 +747,7 @@ elif st.session_state.logged_in_as == 'admin':
                         st.session_state.recorded_samples_count = 0
                         st.session_state.temp_audio_files = []
                         st.session_state.current_sample_processed = False
-                        st.session_state.person_name_input_value_control = '' # Reset the control variable
+                        st.session_state['person_name_input_combined'] = ''
                         st.session_state['actor_age_input'] = 25
                         st.session_state['actor_height_input'] = ''
                         st.session_state['actor_industry_input'] = ''
