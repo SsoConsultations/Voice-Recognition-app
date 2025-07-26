@@ -336,11 +336,9 @@ trained_model, id_to_label_map = load_trained_model()
 # --- Callback Functions for Login/Logout ---
 def set_user_login():
     st.session_state.logged_in_as = 'user'
-    st.rerun() # Explicit rerun after state change for immediate effect
 
 def set_admin_login():
     st.session_state.logged_in_as = 'admin'
-    st.rerun() # Explicit rerun after state change for immediate effect
 
 def logout():
     """Resets the login state and clears relevant session variables."""
