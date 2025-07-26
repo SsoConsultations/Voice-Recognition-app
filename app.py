@@ -46,7 +46,7 @@ N_MFCC = 13 # Number of MFCCs to extract
 # --- Canvas Environment Variables (Provided by Canvas) ---
 # These variables are automatically injected by the Canvas environment.
 # DO NOT remove or modify these lines.
-app_id = typeof app_id !== 'undefined' ? app_id : 'default-app-id'
+app_id = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'
 firebase_config = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}')
 initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : ''
 
