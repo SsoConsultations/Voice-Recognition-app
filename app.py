@@ -421,7 +421,7 @@ else: # User is logged in
                     
                     # Only show the recorder if the current sample hasn't been processed yet
                     if not st.session_state.admin_current_sample_processed:
-                        wav_audio_data = st_audiorec(key="admin_audiorec")
+                        wav_audio_data = st_audiorec()
 
                         if wav_audio_data is not None:
                             st.audio(wav_audio_data, format='audio/wav')
@@ -528,7 +528,7 @@ else: # User is logged in
             else:
                 st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
                 
-                wav_audio_data = st_audiorec(key="user_audiorec")
+                wav_audio_data = st_audiorec()
                 
                 if wav_audio_data is not None:
                     st.audio(wav_audio_data, format='audio/wav')
