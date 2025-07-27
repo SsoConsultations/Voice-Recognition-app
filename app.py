@@ -335,7 +335,7 @@ if 'user_role' not in st.session_state:
 # --- Login Functions ---
 def admin_login(username, password):
     # In a real app, this would be securely stored and checked against a database
-    if username == "admin" and password == "adminpass":
+    if username == "admin" and password == "adminpass": # Example credentials
         st.session_state.logged_in = True
         st.session_state.user_role = 'admin'
         st.success("Admin login successful!")
@@ -346,7 +346,7 @@ def admin_login(username, password):
 
 def user_login(username, password):
     # In a real app, this would be securely stored and checked against a database
-    if username == "user" and password == "userpass":
+    if username == "user" and password == "userpass": # Example credentials
         st.session_state.logged_in = True
         st.session_state.user_role = 'user'
         st.success("User login successful!")
@@ -414,35 +414,37 @@ else: # User is logged in
                 if 'admin_recorded_samples_count' not in st.session_state:
                     st.session_state.admin_recorded_samples_count = 0
                     st.session_state.admin_temp_audio_files = [] # Store paths of locally saved temp files
-                    st.session_state.admin_current_sample_processed = False # New state for managing flow
+                    st.session_state.admin_audio_buffer = None # Store the current audio buffer
 
                 if st.session_state.admin_recorded_samples_count < DEFAULT_NUM_SAMPLES:
                     st.subheader(f"Recording Sample {st.session_state.admin_recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
                     
-                    # Only show the recorder if the current sample hasn't been processed yet
-                    if not st.session_state.admin_current_sample_processed:
-                        wav_audio_data = st_audiorec(key="admin_audiorec")
-
+                    # Only show the recorder if we are waiting for a new recording
+                    if st.session_state.admin_audio_buffer is None:
+                        # Use a unique key for each recorder instance to prevent TypeErrors on reruns
+                        wav_audio_data = st_audiorec(key=f"admin_audiorec_{st.session_state.admin_recorded_samples_count}") 
+                        
                         if wav_audio_data is not None:
-                            st.audio(wav_audio_data, format='audio/wav')
-                            
-                            # Process the recorded audio
-                            with st.spinner("Processing recorded sample..."):
-                                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav")
-                                
-                                with open(local_filename, "wb") as f:
-                                    f.write(wav_audio_data)
-                                
-                                st.session_state.admin_temp_audio_files.append(local_filename)
-                                st.session_state.admin_recorded_samples_count += 1
-                                st.success(f"Sample {st.session_state.admin_recorded_samples_count} recorded and saved locally.")
-                                st.session_state.admin_current_sample_processed = True # Mark as processed
-                                st.rerun() # Rerun to show the 'Next Sample' button
+                            st.session_state.admin_audio_buffer = wav_audio_data # Store the captured audio
+                            st.rerun() # Rerun to process the captured audio
                     else:
-                        # If sample processed, show "Next Sample" button
-                        if st.button(f"Next Sample ({st.session_state.admin_recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)", key="admin_next_sample_btn"):
-                            st.session_state.admin_current_sample_processed = False # Reset for next recording
+                        # Process the stored audio buffer
+                        st.audio(st.session_state.admin_audio_buffer, format='audio/wav')
+                        
+                        with st.spinner("Processing recorded sample..."):
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav")
+                            
+                            with open(local_filename, "wb") as f:
+                                f.write(st.session_state.admin_audio_buffer)
+                            
+                            st.session_state.admin_temp_audio_files.append(local_filename)
+                            st.session_state.admin_recorded_samples_count += 1
+                            st.success(f"Sample {st.session_state.admin_recorded_samples_count} recorded and saved locally.")
+                            st.session_state.admin_audio_buffer = None # Clear buffer for next recording
+                        
+                        # Show "Next Sample" button
+                        if st.button(f"Next Sample ({st.session_state.admin_recorded_samples_count}/{DEFAULT_NUM_SAMPLES} collected)", key=f"admin_next_sample_btn_{st.session_state.admin_recorded_samples_count}"):
                             st.rerun() # Rerun to display the recorder for the next sample
                         else:
                             st.info(f"Sample {st.session_state.admin_recorded_samples_count} collected. Click 'Next Sample' to continue.")
@@ -470,7 +472,7 @@ else: # User is logged in
                             trained_model, id_to_label_map = train_and_save_model()
                             st.session_state.admin_recorded_samples_count = 0 # Reset for next session
                             st.session_state.admin_temp_audio_files = []
-                            st.session_state.admin_current_sample_processed = False # Reset for next session
+                            st.session_state.admin_audio_buffer = None # Reset for next session
                             st.rerun() 
                     else:
                         st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
@@ -481,8 +483,9 @@ else: # User is logged in
                     del st.session_state.admin_recorded_samples_count
                 if 'admin_temp_audio_files' in st.session_state:
                     del st.session_state.admin_temp_audio_files
-                if 'admin_current_sample_processed' in st.session_state:
-                    del st.session_state.admin_current_sample_processed
+                if 'admin_audio_buffer' in st.session_state:
+                    del st.session_state.admin_audio_buffer
+
 
         elif app_mode == "Admin Panel: Retrain Model":
             st.header("🔄 Retrain Speaker Recognition Model")
@@ -528,7 +531,8 @@ else: # User is logged in
             else:
                 st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
                 
-                wav_audio_data = st_audiorec(key="user_audiorec")
+                # The 'key' for st_audiorec in the user panel can remain constant as it's a single, continuous use.
+                wav_audio_data = st_audiorec(key="user_audiorec") 
                 
                 if wav_audio_data is not None:
                     st.audio(wav_audio_data, format='audio/wav')
