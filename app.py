@@ -375,10 +375,11 @@ if not st.session_state.logged_in:
 
         if submit_button:
             if login_type == "Admin Login":
-                admin_login(username, password)
-                
+                if admin_login(username, password):
+                    st.rerun()
             elif login_type == "User Login":
-                user_login(username, password)
+                if user_login(username, password):
+                    st.rerun()
 
 else: # User is logged in
     st.sidebar.header("Navigation")
