@@ -376,6 +376,7 @@ if not st.session_state.logged_in:
         if submit_button:
             if login_type == "Admin Login":
                 admin_login(username, password)
+                
             elif login_type == "User Login":
                 user_login(username, password)
 
