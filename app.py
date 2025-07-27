@@ -357,7 +357,6 @@ def user_login(username, password):
 def logout():
     st.session_state.logged_in = False
     st.session_state.user_role = None
-    st.info("Logged out successfully.")
     # Clear caches that might hold sensitive data or models
     load_trained_model.clear()
     load_data_from_firebase.clear()
