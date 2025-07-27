@@ -281,6 +281,7 @@ def load_trained_model():
             model = pickle.load(f)
         with open(temp_labels_path, 'rb') as f:
             id_to_label = pickle.load(f)
+        st.success("✅ Model and labels loaded successfully from Firebase.")
         
         # Clean up temporary downloaded files
         os.remove(temp_model_path)
