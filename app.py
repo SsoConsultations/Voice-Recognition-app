@@ -361,8 +361,7 @@ def logout():
     load_trained_model.clear()
     load_data_from_firebase.clear()
     train_and_save_model.clear()
-    st.rerun()
-
+    
 # --- Home Page / Login Screen ---
 if not st.session_state.logged_in:
     st.subheader("Welcome! Please Login to Continue.")
@@ -376,11 +375,9 @@ if not st.session_state.logged_in:
 
         if submit_button:
             if login_type == "Admin Login":
-                if admin_login(username, password):
-                    st.rerun()
+                if admin_login(username, password)
             elif login_type == "User Login":
-                if user_login(username, password):
-                    st.rerun()
+                if user_login(username, password)
 
 else: # User is logged in
     st.sidebar.header("Navigation")
