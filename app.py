@@ -531,7 +531,7 @@ else:
                             # Process the recorded audio
                             with st.spinner("Processing recorded sample..."):
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name.replace(' ', '_').replace('/', '_')}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
+                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
 
                                 with open(local_filename, "wb") as f:
                                     f.write(wav_audio_data)
