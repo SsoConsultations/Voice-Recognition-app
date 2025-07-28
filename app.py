@@ -473,7 +473,8 @@ else:
                         with st.spinner("Uploading samples to Firebase and retraining model..."):
                             uploaded_count = 0
                             for local_file_path in st.session_state.admin_temp_audio_files:
-                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"<br>                                if upload_audio_to_firebase(local_file_path, firebase_path):
+                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
+                                if upload_audio_to_firebase(local_file_path, firebase_path):
                                     uploaded_count += 1
                                 os.remove(local_file_path) # Clean up local temp file
 
