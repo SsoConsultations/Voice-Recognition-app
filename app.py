@@ -402,14 +402,10 @@ if not st.session_state.logged_in:
                 if user_login(username, password):
                     st.rerun()
 
-else: # User is logged in
-    st.sidebar.header("Navigation")
-
+else:
     if st.session_state.user_role == 'admin':
-        st.sidebar.success(f"Logged in as: **Admin**")
         app_mode = st.sidebar.radio("Go to", ["Admin Panel: Add Speaker Data", "Admin Panel: Retrain Model"])
     elif st.session_state.user_role == 'user':
-        st.sidebar.info(f"Logged in as: **User**")
         app_mode = st.sidebar.radio("Go to", ["User Panel: Recognize Speaker from File", "User Panel: Recognize Speaker Live"])
 
     st.sidebar.button("Logout", on_click=logout)
