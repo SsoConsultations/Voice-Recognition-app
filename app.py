@@ -420,7 +420,6 @@ def load_trained_model():
         with open(temp_labels_path, 'rb') as f:
             id_to_label = pickle.load(f)
 
-        st.success("✅ Model and labels loaded successfully from Firebase Storage.")
         return model, id_to_label
     except FileNotFoundError:
         st.warning(f"Model or label file not found locally after download attempt.")
