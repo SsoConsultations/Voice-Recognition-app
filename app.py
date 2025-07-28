@@ -637,7 +637,7 @@ else:
                     # Only show the recorder if the current sample hasn't been processed yet
                     if not st.session_state.admin_current_sample_processed:
                         # Streamlit audiorec provides the raw WAV bytes
-                        wav_audio_data = st_audiorec(key=f"audiorec_{st.session_state.admin_recorded_samples_count}")
+                        wav_audio_data = st_audiorec()
 
                         if wav_audio_data is not None:
                             st.audio(wav_audio_data, format='audio/wav')
