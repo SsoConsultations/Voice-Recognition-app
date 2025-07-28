@@ -772,7 +772,7 @@ else:
             else:
                 st.info(f"Record for approximately {DEFAULT_DURATION} seconds. The app will attempt to recognize the speaker.")
 
-                live_audio_data = st_audiorec(key="live_recognition_recorder")
+                live_audio_data = st_audiorec()
 
                 if live_audio_data is not None:
                     st.audio(live_audio_data, format='audio/wav')
