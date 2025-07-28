@@ -513,7 +513,7 @@ else:
                             # Process the recorded audio
                             with st.spinner("Processing recorded sample..."):
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name.replace(' ', '_')}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
+                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
 
                                 with open(local_filename, "wb") as f:
                                     f.write(wav_audio_data)
@@ -538,7 +538,7 @@ else:
                         with st.spinner("Uploading samples to Firebase, saving metadata, and retraining model..."):
                             uploaded_audio_count = 0
                             for local_file_path in st.session_state.admin_temp_audio_files:
-                                firebase_path = f"data/{person_name.replace(' ', '_')}/{os.path.basename(local_file_path)}" # Ensure consistent naming with metadata
+                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}" # Ensure consistent naming with metadata
                                 if upload_audio_to_firebase(local_file_path, firebase_path):
                                     uploaded_audio_count += 1
                                 os.remove(local_file_path) # Clean up local temp file
