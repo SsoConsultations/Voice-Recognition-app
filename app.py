@@ -548,19 +548,19 @@ else: # User is logged in
                             st.rerun()  
                     else:
                         st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
-                else:
-                    st.info("Please enter a person's name to start recording samples.")
+            else:
+                st.info("Please enter a person's name to start recording samples.")
                 # Reset session state if name is cleared
-                    if 'admin_recorded_samples_count' in st.session_state:
-                        del st.session_state.admin_recorded_samples_count
-                    if 'admin_temp_audio_files' in st.session_state:
-                        del st.session_state.admin_temp_audio_files
-                    if 'admin_current_sample_processed' in st.session_state:
-                        del st.session_state.admin_current_sample_processed
+                if 'admin_recorded_samples_count' in st.session_state:
+                    del st.session_state.admin_recorded_samples_count
+                if 'admin_temp_audio_files' in st.session_state:
+                    del st.session_state.admin_temp_audio_files
+                if 'admin_current_sample_processed' in st.session_state:
+                    del st.session_state.admin_current_sample_processed
 
-            elif app_mode == "Admin Panel: Retrain Model":
-                st.header("🔄 Retrain Speaker Recognition Model")
-                st.write("This will retrain the model using all available data in Firebase Storage. This is useful if you've manually added data or want to refresh the model.")
+        elif app_mode == "Admin Panel: Retrain Model":
+            st.header("🔄 Retrain Speaker Recognition Model")
+            st.write("This will retrain the model using all available data in Firebase Storage. This is useful if you've manually added data or want to refresh the model.")
 
                 if st.button("Trigger Model Retraining", key="trigger_retrain_btn"):
                     # Clear all relevant caches before retraining
