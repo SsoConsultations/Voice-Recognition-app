@@ -49,7 +49,7 @@ def initialize_firebase_app():
 
             # Parse the JSON string into a dictionary
             firebase_config_dict = json.loads(firebase_service_account_json_str)
-            
+
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
@@ -139,12 +139,12 @@ def load_data_from_firebase(data_prefix="data"):
     y = [] # Numeric labels
     labels_map = {} # Maps speaker name to a numeric ID
     id_to_label = [] # Maps numeric ID back to speaker name
-    
+
     label_id_counter = 0
 
     # Get all blobs from the 'data/' prefix
     all_blobs = list_files_in_firebase_storage(prefix=data_prefix + "/")
-    
+
     # Extract unique speaker names from blob paths (e.g., 'data/JohnDoe/sample.wav' -> 'JohnDoe')
     speaker_names = sorted(list(set([blob.split('/')[1] for blob in all_blobs if len(blob.split('/')) > 1 and blob.endswith('.wav')])))
 
@@ -153,7 +153,7 @@ def load_data_from_firebase(data_prefix="data"):
         return np.array([]), np.array([]), {}, []
 
     st.info(f"Processing speakers found in Firebase: {', '.join(speaker_names)}")
-    
+
     total_audio_files = sum(1 for blob in all_blobs if blob.endswith('.wav'))
     if total_audio_files == 0:
         st.warning("No WAV files found in Firebase Storage for processing.")
@@ -164,20 +164,20 @@ def load_data_from_firebase(data_prefix="data"):
 
     for speaker_name in speaker_names:
         speaker_prefix = f"{data_prefix}/{speaker_name}/"
-        
+
         if speaker_name not in labels_map:
             labels_map[speaker_name] = label_id_counter
             id_to_label.append(speaker_name)
             label_id_counter += 1
 
         current_label_id = labels_map[speaker_name]
-        
+
         speaker_audio_blobs = [b for b in all_blobs if b.startswith(speaker_prefix) and b.endswith('.wav')]
-        
+
         speaker_has_audio = False
         for firebase_audio_path in speaker_audio_blobs:
             local_download_path = os.path.join(TEMP_RECORDINGS_DIR, os.path.basename(firebase_audio_path))
-            
+
             if download_audio_from_firebase(firebase_audio_path, local_download_path):
                 features = extract_features(local_download_path)
                 if features is not None:
@@ -187,7 +187,7 @@ def load_data_from_firebase(data_prefix="data"):
                 os.remove(local_download_path) # Clean up downloaded file immediately
             else:
                 st.warning(f"Skipping {firebase_audio_path} due to download error or file not found.")
-            
+
             processed_count += 1
             progress_bar.progress(processed_count / total_audio_files, text=f"Processed {processed_count}/{total_audio_files} files...")
 
@@ -208,12 +208,12 @@ def train_and_save_model():
     if len(X) == 0:
         st.warning("No audio data found or features extracted from Firebase. Cannot train model.")
         return None, None
-    
+
     unique_speakers = len(labels_map)
     if unique_speakers < 2:
         st.warning(f"Need at least 2 distinct speakers ({unique_speakers} found) to train a meaningful model. Please add more data.")
         return None, None
-    
+
     # Check if each speaker has enough samples for stratified splitting
     for speaker_id in range(unique_speakers):
         if np.sum(y == speaker_id) < 2:
@@ -225,7 +225,7 @@ def train_and_save_model():
 
     # Split data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-    
+
     st.info(f"Training samples: {len(X_train)}")
     st.info(f"Testing samples: {len(X_test)}")
 
@@ -250,7 +250,7 @@ def train_and_save_model():
 
     upload_audio_to_firebase(MODEL_FILENAME, MODEL_FILENAME)
     upload_audio_to_firebase(LABELS_FILENAME, LABELS_FILENAME)
-    
+
     # Clean up local model files after upload
     os.remove(MODEL_FILENAME)
     os.remove(LABELS_FILENAME)
@@ -265,7 +265,7 @@ def load_trained_model():
     try:
         temp_model_path = os.path.join(TEMP_RECORDINGS_DIR, MODEL_FILENAME)
         temp_labels_path = os.path.join(TEMP_RECORDINGS_DIR, LABELS_FILENAME)
-        
+
         # Try downloading the model and labels from Firebase
         model_downloaded = download_audio_from_firebase(MODEL_FILENAME, temp_model_path)
         labels_downloaded = download_audio_from_firebase(LABELS_FILENAME, temp_labels_path)
@@ -282,7 +282,7 @@ def load_trained_model():
         with open(temp_labels_path, 'rb') as f:
             id_to_label = pickle.load(f)
         st.success("✅ Model and labels loaded successfully from Firebase.")
-        
+
         # Clean up temporary downloaded files
         os.remove(temp_model_path)
         os.remove(temp_labels_path)
@@ -322,8 +322,15 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
 
 st.set_page_config(page_title="Speaker Recognition", layout="centered", initial_sidebar_state="auto")
 
-st.title("🗣️ Speaker Recognition App")
-st.markdown("---")
+# --- TOP HEADER WITH LOGO AND CUSTOM TITLE ---
+col1, col2 = st.columns([0.1, 0.9]) # Adjust column width for logo and text
+with col1:
+    st.image("sso_logo.png", width=70) # Adjust width as needed
+with col2:
+    st.markdown("<h1 style='display: inline-block; vertical-align: middle;'>SSO Consultants Voice Recogniser</h1>", unsafe_allow_html=True)
+
+st.markdown("---") # Separator line
+
 
 # Initialize session state for login status and role
 if 'logged_in' not in st.session_state:
@@ -375,11 +382,11 @@ def logout():
     load_trained_model.clear()
     load_data_from_firebase.clear()
     train_and_save_model.clear()
-    
+
 # --- Home Page / Login Screen ---
 if not st.session_state.logged_in:
     st.subheader("Welcome! Please Login to Continue.")
-    
+
     login_type = st.radio("Select Login Type:", ("User Login", "Admin Login"))
 
     with st.form("login_form"):
@@ -397,7 +404,7 @@ if not st.session_state.logged_in:
 
 else: # User is logged in
     st.sidebar.header("Navigation")
-    
+
     if st.session_state.user_role == 'admin':
         st.sidebar.success(f"Logged in as: **Admin**")
         app_mode = st.sidebar.radio("Go to", ["Admin Panel: Add Speaker Data", "Admin Panel: Retrain Model"])
@@ -429,22 +436,22 @@ else: # User is logged in
 
                 if st.session_state.admin_recorded_samples_count < DEFAULT_NUM_SAMPLES:
                     st.subheader(f"Recording Sample {st.session_state.admin_recorded_samples_count + 1}/{DEFAULT_NUM_SAMPLES}")
-                    
+
                     # Only show the recorder if the current sample hasn't been processed yet
                     if not st.session_state.admin_current_sample_processed:
                         wav_audio_data = st_audiorec()
 
                         if wav_audio_data is not None:
                             st.audio(wav_audio_data, format='audio/wav')
-                            
+
                             # Process the recorded audio
                             with st.spinner("Processing recorded sample..."):
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                                 local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav")
-                                
+
                                 with open(local_filename, "wb") as f:
                                     f.write(wav_audio_data)
-                                
+
                                 st.session_state.admin_temp_audio_files.append(local_filename)
                                 st.session_state.admin_recorded_samples_count += 1
                                 st.success(f"Sample {st.session_state.admin_recorded_samples_count} recorded and saved locally.")
@@ -460,7 +467,7 @@ else: # User is logged in
 
                 else: # All samples collected
                     st.success(f"All {DEFAULT_NUM_SAMPLES} samples recorded for {person_name}!")
-                    
+
                     if st.button("Upload Samples and Train Model", key="admin_upload_train_btn"):
                         with st.spinner("Uploading samples to Firebase and retraining model..."):
                             uploaded_count = 0
@@ -469,9 +476,9 @@ else: # User is logged in
                                 if upload_audio_to_firebase(local_file_path, firebase_path):
                                     uploaded_count += 1
                                 os.remove(local_file_path) # Clean up local temp file
-                                
+
                             st.info(f"{uploaded_count} samples uploaded for {person_name}.")
-                            
+
                             # Clear caches to ensure new data is loaded
                             load_data_from_firebase.clear()
                             train_and_save_model.clear()
@@ -504,7 +511,7 @@ else: # User is logged in
                 load_data_from_firebase.clear()
                 train_and_save_model.clear()
                 load_trained_model.clear()
-                
+
                 trained_model, id_to_label_map = train_and_save_model()
                 if trained_model:
                     st.success("Model retraining initiated and completed successfully!")
@@ -516,7 +523,7 @@ else: # User is logged in
     elif st.session_state.user_role == 'user':
         if app_mode == "User Panel: Recognize Speaker from File":
             st.header("🔍 Recognize Speaker from a File")
-            
+
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
             else:
@@ -524,9 +531,9 @@ else: # User is logged in
 
                 if uploaded_file is not None:
                     st.audio(uploaded_file, format='audio/wav')
-                    
+
                     audio_buffer = io.BytesIO(uploaded_file.getvalue())
-                    
+
                     st.write("Analyzing uploaded file...")
                     recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
                     st.success(f"File analysis complete. Predicted Speaker: **{recognized_speaker}**")
@@ -538,14 +545,14 @@ else: # User is logged in
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
             else:
                 st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
-                
+
                 wav_audio_data = st_audiorec()
-                
+
                 if wav_audio_data is not None:
                     st.audio(wav_audio_data, format='audio/wav')
-                    
+
                     audio_buffer = io.BytesIO(wav_audio_data)
-                    
+
                     st.write("Analyzing live recording...")
                     recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
                     st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
