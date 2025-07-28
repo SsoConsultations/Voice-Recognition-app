@@ -562,7 +562,6 @@ def logout():
     get_actor_metadata.clear() # Clear metadata cache too!
     get_all_actor_metadata.clear() # NEW: Clear all metadata cache on logout
     st.success("Logged out successfully!")
-    st.rerun() # Rerun to show login screen
 
 # --- Home Page / Login Screen ---
 if not st.session_state.logged_in:
