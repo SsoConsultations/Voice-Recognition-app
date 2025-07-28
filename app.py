@@ -473,7 +473,7 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
         probabilities = model.predict_proba(features)[0]
         confidence = probabilities[prediction_id] * 100
 
-        st.write(f"Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
+        st.write(f"Predicted Speaker: **{predicted_speaker}**)")
 
         # Fetch and display metadata
         metadata = get_actor_metadata(predicted_speaker)
