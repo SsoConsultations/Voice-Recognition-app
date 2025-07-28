@@ -14,7 +14,7 @@ import json # For handling Firebase service account JSON
 
 # Firebase imports
 import firebase_admin
-from firebase_admin import credentials, storage
+from firebase_admin import credentials, storage, firestore # Import firestore
 
 # Attempt to import the custom Streamlit audio recorder component
 try:
@@ -27,6 +27,7 @@ except ImportError:
 MODEL_FILENAME = 'speaker_recognition_model.pkl'
 LABELS_FILENAME = 'id_to_label_map.pkl'
 TEMP_RECORDINGS_DIR = "temp_recordings" # For local temporary storage before/after Firebase interaction
+METADATA_COLLECTION = 'actors_actresses_metadata' # Firestore collection name for metadata
 
 # Recording Specific
 DEFAULT_NUM_SAMPLES = 5     # Number of audio samples to record for each person (increased to 5)
@@ -53,12 +54,14 @@ def initialize_firebase_app():
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
+            st.success("✅ Firebase initialized successfully from Streamlit secrets.")
             return True
         except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
             st.warning(f"Firebase secrets not found or error during initialization: {e}. Attempting to load from local 'firebase_service_account.json'.")
             local_service_account_path = 'firebase_service_account.json'
             local_storage_bucket = 'face-recogniser-app.appspot.com' # REMEMBER TO REPLACE THIS FOR LOCAL TESTING
+            # !! IMPORTANT: Replace 'face-recogniser-app.appspot.com' with your actual Firebase Storage bucket for local testing !!
 
             if os.path.exists(local_service_account_path):
                 try:
@@ -80,6 +83,13 @@ os.makedirs(TEMP_RECORDINGS_DIR, exist_ok=True)
 # Initialize Firebase (this will run once due to @st.cache_resource)
 if not initialize_firebase_app():
     st.stop() # Stop the app if Firebase cannot be initialized
+
+# Get Firestore client
+@st.cache_resource(show_spinner=False)
+def get_firestore_client():
+    return firestore.client()
+
+db = get_firestore_client()
 
 # --- Firebase Storage Utility Functions ---
 
@@ -111,6 +121,38 @@ def list_files_in_firebase_storage(prefix=""):
     bucket = storage.bucket()
     blobs = bucket.list_blobs(prefix=prefix)
     return [blob.name for blob in blobs]
+
+# --- Firestore Metadata Functions ---
+def save_actor_metadata(actor_name, age, height, total_films, hit_films):
+    """Saves/updates an actor's metadata in Firestore."""
+    try:
+        doc_ref = db.collection(METADATA_COLLECTION).document(actor_name)
+        doc_ref.set({
+            'age': age,
+            'height': height,
+            'total_films': total_films,
+            'hit_films': hit_films,
+            'last_updated': firestore.SERVER_TIMESTAMP
+        }, merge=True) # merge=True allows updating specific fields without overwriting the whole document
+        st.success(f"Metadata for {actor_name} saved/updated in Firestore.")
+        return True
+    except Exception as e:
+        st.error(f"❌ Error saving metadata for {actor_name} to Firestore: {e}")
+        return False
+
+@st.cache_data(ttl=3600) # Cache metadata for an hour to reduce reads
+def get_actor_metadata(actor_name):
+    """Retrieves an actor's metadata from Firestore."""
+    try:
+        doc_ref = db.collection(METADATA_COLLECTION).document(actor_name)
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict()
+        else:
+            return None
+    except Exception as e:
+        st.error(f"❌ Error retrieving metadata for {actor_name} from Firestore: {e}")
+        return None
 
 # --- Feature Extraction Function ---
 
@@ -299,13 +341,13 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
     This is a unified function for both file uploads and live recordings.
     """
     if model is None or id_to_label is None:
-        return "Not Available (Model not loaded)"
+        return "Not Available (Model not loaded)", None
 
     with st.spinner("Extracting features and predicting..."):
         features = extract_features(audio_source_buffer)
 
     if features is None:
-        return "Unknown Speaker (Feature Extraction Failed)"
+        return "Unknown Speaker (Feature Extraction Failed)", None
 
     features = features.reshape(1, -1) # Reshape for prediction
 
@@ -316,7 +358,19 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
     confidence = probabilities[prediction_id] * 100
 
     st.write(f"Predicted Speaker: **{predicted_speaker}** (Confidence: {confidence:.2f}%)")
-    return predicted_speaker
+
+    # Fetch and display metadata
+    metadata = get_actor_metadata(predicted_speaker)
+    if metadata:
+        st.subheader(f"Details for {predicted_speaker}:")
+        st.write(f"**Age:** {metadata.get('age', 'N/A')} years")
+        st.write(f"**Height:** {metadata.get('height', 'N/A')}")
+        st.write(f"**Total Films:** {metadata.get('total_films', 'N/A')}")
+        st.write(f"**Hit Films:** {metadata.get('hit_films', 'N/A')}")
+    else:
+        st.info(f"No additional metadata found for {predicted_speaker}.")
+
+    return predicted_speaker, metadata # Return both for potential future use
 
 # --- Streamlit UI Layout ---
 
@@ -382,6 +436,7 @@ def logout():
     load_trained_model.clear()
     load_data_from_firebase.clear()
     train_and_save_model.clear()
+    get_actor_metadata.clear() # Clear metadata cache too!
 
 # --- Home Page / Login Screen ---
 if not st.session_state.logged_in:
@@ -421,10 +476,20 @@ else:
     # --- Admin Panel ---
     if st.session_state.user_role == 'admin':
         if app_mode == "Admin Panel: Add Speaker Data":
-            st.header("➕ Add/Record New Speaker Voice Data")
-            st.write("Record multiple voice samples for a person to train the recognition model. Each sample will be uploaded to Firebase Storage.")
+            st.header("➕ Add/Record New Actor/Actress Voice Data & Metadata")
+            st.write("Record multiple voice samples for an actor/actress and provide their details. All data will be uploaded to Firebase Storage and Firestore.")
 
-            person_name = st.text_input("Enter the name of the person to record:", key="admin_person_name_input").strip()
+            person_name = st.text_input("Enter the name of the Actor/Actress:", key="admin_person_name_input").strip()
+
+            # New input fields for metadata
+            st.subheader("Actor/Actress Details")
+            col_meta1, col_meta2 = st.columns(2)
+            with col_meta1:
+                age = st.number_input("Age (Years):", min_value=1, max_value=120, value=30, key="actor_age_input")
+                total_films = st.number_input("Total Films:", min_value=0, value=10, key="actor_total_films_input")
+            with col_meta2:
+                height = st.text_input("Height (e.g., 5'8\" or 175cm):", value="N/A", key="actor_height_input")
+                hit_films = st.number_input("Hit Films:", min_value=0, value=2, key="actor_hit_films_input")
 
             if person_name:
                 st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
@@ -448,7 +513,7 @@ else:
                             # Process the recorded audio
                             with st.spinner("Processing recorded sample..."):
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav")
+                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name.replace(' ', '_')}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
 
                                 with open(local_filename, "wb") as f:
                                     f.write(wav_audio_data)
@@ -469,21 +534,29 @@ else:
                 else: # All samples collected
                     st.success(f"All {DEFAULT_NUM_SAMPLES} samples recorded for {person_name}!")
 
-                    if st.button("Upload Samples and Train Model", key="admin_upload_train_btn"):
-                        with st.spinner("Uploading samples to Firebase and retraining model..."):
-                            uploaded_count = 0
+                    if st.button("Upload Samples & Save Metadata and Train Model", key="admin_upload_train_btn"):
+                        with st.spinner("Uploading samples to Firebase, saving metadata, and retraining model..."):
+                            uploaded_audio_count = 0
                             for local_file_path in st.session_state.admin_temp_audio_files:
-                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
+                                firebase_path = f"data/{person_name.replace(' ', '_')}/{os.path.basename(local_file_path)}" # Ensure consistent naming with metadata
                                 if upload_audio_to_firebase(local_file_path, firebase_path):
-                                    uploaded_count += 1
+                                    uploaded_audio_count += 1
                                 os.remove(local_file_path) # Clean up local temp file
 
-                            st.info(f"{uploaded_count} samples uploaded for {person_name}.")
+                            st.info(f"{uploaded_audio_count} audio samples uploaded for {person_name}.")
+
+                            # Save metadata to Firestore
+                            if save_actor_metadata(person_name, age, height, total_films, hit_films):
+                                st.info(f"Metadata for {person_name} successfully saved.")
+                            else:
+                                st.error(f"Failed to save metadata for {person_name}.")
+
 
                             # Clear caches to ensure new data is loaded
                             load_data_from_firebase.clear()
                             train_and_save_model.clear()
                             load_trained_model.clear()
+                            get_actor_metadata.clear() # Clear metadata cache to ensure fresh data for users
 
                             # Retrain the model with the new data
                             trained_model, id_to_label_map = train_and_save_model()
@@ -492,9 +565,9 @@ else:
                             st.session_state.admin_current_sample_processed = False # Reset for next session
                             st.rerun()
                     else:
-                        st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
+                        st.info("Click 'Upload Samples & Save Metadata and Train Model' to finalize and update the model and metadata.")
             else:
-                st.info("Please enter a person's name to start recording samples.")
+                st.info("Please enter an actor/actress's name to start recording samples and add details.")
                 # Reset session state if name is cleared
                 if 'admin_recorded_samples_count' in st.session_state:
                     del st.session_state.admin_recorded_samples_count
@@ -505,13 +578,15 @@ else:
 
         elif app_mode == "Admin Panel: Retrain Model":
             st.header("🔄 Retrain Speaker Recognition Model")
-            st.write("This will retrain the model using all available data in Firebase Storage. This is useful if you've manually added data or want to refresh the model.")
+            st.write("This will retrain the model using all available audio data in Firebase Storage. This is useful if you've manually added/removed data or want to refresh the model.")
+            st.info("Metadata is managed separately in Firestore and is not directly affected by model retraining, but the model will learn from the speakers whose audio data exists.")
 
             if st.button("Trigger Model Retraining", key="trigger_retrain_btn"):
                 # Clear all relevant caches before retraining
                 load_data_from_firebase.clear()
                 train_and_save_model.clear()
                 load_trained_model.clear()
+                # No need to clear get_actor_metadata here, as retraining doesn't change metadata
 
                 trained_model, id_to_label_map = train_and_save_model()
                 if trained_model:
@@ -522,8 +597,10 @@ else:
 
     # --- User Panel ---
     elif st.session_state.user_role == 'user':
+        st.info("If metadata is not showing for a recognized speaker, the admin might need to add it via the 'Add Speaker Data' panel.")
+
         if app_mode == "User Panel: Recognize Speaker from File":
-            st.header("🔍 Recognize Speaker from a File")
+            st.header("🔍 Recognize Actor/Actress from a File")
 
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
@@ -536,11 +613,12 @@ else:
                     audio_buffer = io.BytesIO(uploaded_file.getvalue())
 
                     st.write("Analyzing uploaded file...")
-                    recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
-                    st.success(f"File analysis complete. Predicted Speaker: **{recognized_speaker}**")
+                    recognized_speaker, metadata = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
+                    # The display of metadata is now handled directly within recognize_speaker_from_audio_source
+                    st.success(f"File analysis complete.")
 
         elif app_mode == "User Panel: Recognize Speaker Live":
-            st.header("🎤 Recognize Speaker from Live Microphone Input")
+            st.header("🎤 Recognize Actor/Actress from Live Microphone Input")
 
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
@@ -555,5 +633,6 @@ else:
                     audio_buffer = io.BytesIO(wav_audio_data)
 
                     st.write("Analyzing live recording...")
-                    recognized_speaker = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
-                    st.success(f"Live analysis complete. Predicted Speaker: **{recognized_speaker}**")
+                    recognized_speaker, metadata = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
+                    # The display of metadata is now handled directly within recognize_speaker_from_audio_source
+                    st.success(f"Live analysis complete.")
