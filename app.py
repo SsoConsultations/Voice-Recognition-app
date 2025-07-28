@@ -15,7 +15,8 @@ import pandas as pd # Import pandas for data_editor
 
 # Firebase imports
 import firebase_admin
-from firebase_admin import credentials, storage, firestore # Import firestore
+from firebase_admin import credentials, storage, firestore
+from google.cloud.firestore import Timestamp # Add this line# Import firestore
 
 # Attempt to import the custom Streamlit audio recorder component
 try:
