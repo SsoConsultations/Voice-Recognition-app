@@ -715,8 +715,7 @@ else:
         elif app_mode == "Admin Panel: Retrain Model":
             st.header("🔄 Retrain Speaker Recognition Model")
             st.write("This will retrain the model using all available audio data in Firebase Storage. This is useful if you've manually added/removed data or want to refresh the model.")
-            st.info("Metadata is managed separately in Firestore and is not directly affected by model retraining, but the model will learn from the speakers whose audio data exists.")
-
+            
             if st.button("Trigger Model Retraining", key="trigger_retrain_btn"):
                 # Clear all relevant caches before retraining
                 load_data_from_firebase.clear()
