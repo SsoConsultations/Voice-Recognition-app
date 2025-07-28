@@ -333,8 +333,15 @@ if 'user_role' not in st.session_state:
 
 # --- Login Functions ---
 def admin_login(username, password):
-    # In a real app, this would be securely stored and checked against a database
-    if username == "admin" and password == "adminpass":
+    # Fetch credentials from Streamlit secrets
+    try:
+        ADMIN_USERNAME = st.secrets["login"]["admin_username"]
+        ADMIN_PASSWORD = st.secrets["login"]["admin_password"]
+    except KeyError:
+        st.error("Admin login credentials not found in secrets.toml. Please configure them.")
+        return False
+
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
         st.session_state.logged_in = True
         st.session_state.user_role = 'admin'
         st.success("Admin login successful!")
@@ -344,8 +351,15 @@ def admin_login(username, password):
         return False
 
 def user_login(username, password):
-    # In a real app, this would be securely stored and checked against a database
-    if username == "user" and password == "userpass":
+    # Fetch credentials from Streamlit secrets
+    try:
+        USER_USERNAME = st.secrets["login"]["user_username"]
+        USER_PASSWORD = st.secrets["login"]["user_password"]
+    except KeyError:
+        st.error("User login credentials not found in secrets.toml. Please configure them.")
+        return False
+
+    if username == USER_USERNAME and password == USER_PASSWORD:
         st.session_state.logged_in = True
         st.session_state.user_role = 'user'
         st.success("User login successful!")
@@ -468,7 +482,7 @@ else: # User is logged in
                             st.session_state.admin_recorded_samples_count = 0 # Reset for next session
                             st.session_state.admin_temp_audio_files = []
                             st.session_state.admin_current_sample_processed = False # Reset for next session
-                            st.rerun() 
+                            st.rerun()  
                     else:
                         st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
             else:
