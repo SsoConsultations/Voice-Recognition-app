@@ -511,7 +511,6 @@ else:
             industry = st.text_input("Industry (e.g., Bollywood, Hollywood, Tollywood):", value="N/A", key="actor_industry_input") # Added industry input
 
             if person_name:
-                st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
                 st.markdown(f"**Instructions:** For each sample, click 'Start Recording', speak for approximately **{DEFAULT_DURATION} seconds**, then **click 'Stop'** to finalize the sample. After processing, click 'Next Sample' to continue.")
 
                 if 'admin_recorded_samples_count' not in st.session_state:
