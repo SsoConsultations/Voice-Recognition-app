@@ -734,7 +734,6 @@ else:
         elif app_mode == "Admin Panel: View/Update Actor Details": # NEW ADMIN PANEL SECTION
             st.header("📝 View and Update Actor/Actress Details")
             st.write("Edit actor/actress metadata directly in the table below. Changes will be saved to Firestore.")
-            st.warning("Editing the 'Name' column is not supported directly. To change a name, you'd typically delete and re-add the speaker.")
 
             # Load all existing metadata
             current_df = get_all_actor_metadata()
