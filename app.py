@@ -713,7 +713,7 @@ else:
                     del st.session_state.admin_current_sample_processed
 
         elif app_mode == "Admin Panel: Retrain Model":
-            st.header("🔄 Retrain Speaker Recognition Model")
+            st.header("Retrain Speaker Recognition Model")
             st.write("This will retrain the model using all available audio data in Firebase Storage. This is useful if you've manually added/removed data or want to refresh the model.")
             
             if st.button("Trigger Model Retraining", key="trigger_retrain_btn"):
@@ -732,7 +732,7 @@ else:
                 st.rerun()
 
         elif app_mode == "Admin Panel: View/Update Actor Details": # NEW ADMIN PANEL SECTION
-            st.header("📝 View and Update Actor/Actress Details")
+            st.header("View and Update Actor/Actress Details")
             st.write("Edit actor/actress metadata directly in the table below. Changes will be saved to Firestore.")
 
             # Load all existing metadata
@@ -865,7 +865,7 @@ else:
     elif st.session_state.user_role == 'user':
 
         if app_mode == "User Panel: Recognize Speaker from File":
-            st.header("🔍 Recognize Actor/Actress from a File")
+            st.header("Recognize Actor/Actress from a File")
 
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
@@ -882,7 +882,7 @@ else:
                     # The display of metadata is now handled directly within recognize_speaker_from_audio_source
 
         elif app_mode == "User Panel: Recognize Speaker Live":
-            st.header("🎤 Recognize Actor/Actress Live")
+            st.header("Recognize Actor/Actress Live")
             st.write(f"**Instructions:** To recognise a voice, click 'Start Recording', speak clearly , then **click 'Stop'** to finalize the recording.")
 
 
