@@ -870,7 +870,6 @@ else:
 
     # --- User Panel ---
     elif st.session_state.user_role == 'user':
-        st.info("If metadata is not showing for a recognized speaker, the admin might need to add it via the 'Add Speaker Data' panel.")
 
         if app_mode == "User Panel: Recognize Speaker from File":
             st.header("🔍 Recognize Actor/Actress from a File")
