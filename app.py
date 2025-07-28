@@ -883,6 +883,8 @@ else:
 
         elif app_mode == "User Panel: Recognize Speaker Live":
             st.header("🎤 Recognize Actor/Actress Live")
+             st.markdown(f"**Instructions:** To recognise a voice, click 'Start Recording', speak clearly , then **click 'Stop'** to finalize the recording.")
+
 
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
