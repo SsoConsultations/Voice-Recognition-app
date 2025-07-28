@@ -11,12 +11,10 @@ import pickle
 import time
 import io # For handling in-memory audio data (BytesIO)
 import json # For handling Firebase service account JSON
-import pandas as pd # Import pandas for data_editor
 
 # Firebase imports
 import firebase_admin
-from firebase_admin import credentials, storage, firestore
-from google.cloud.firestore import Timestamp # Add this line# Import firestore
+from firebase_admin import credentials, storage, firestore # Import firestore
 
 # Attempt to import the custom Streamlit audio recorder component
 try:
@@ -156,61 +154,6 @@ def get_actor_metadata(actor_name):
     except Exception as e:
         st.error(f"❌ Error retrieving metadata for {actor_name} from Firestore: {e}")
         return None
-
-# --- NEW: Function to get all actor/actress data for the editor ---
-@st.cache_data(ttl=600, show_spinner="Loading actor/actress data...") # Cache for 10 minutes
-def get_all_actor_data_for_editor():
-    """Fetches all documents from the actors_actresses_metadata collection and returns as a Pandas DataFrame."""
-    try:
-        docs = db.collection(METADATA_COLLECTION).stream()
-        data_list = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['Name'] = doc.id  # Use document ID as the 'Name' for the data editor
-            # Convert Firestore Timestamp to Python datetime if present for display
-            if 'last_updated' in data and isinstance(data['last_updated'], firestore.Timestamp):
-                data['last_updated'] = data['last_updated'].astimezone().strftime('%Y-%m-%d %H:%M:%S')
-            data_list.append(data)
-        
-        if not data_list:
-            return pd.DataFrame()
-            
-        df = pd.DataFrame(data_list)
-        # Ensure 'Name' is the first column for better display
-        if 'Name' in df.columns:
-            name_col = df.pop('Name')
-            df.insert(0, 'Name', name_col)
-        return df
-    except Exception as e:
-        st.error(f"Error fetching actor/actress data for editor: {e}")
-        return pd.DataFrame()
-
-# --- NEW: Function to update an actor/actress document in Firestore ---
-def update_actor_document_in_firestore(actor_name, new_data):
-    """Updates a specific actor/actress document in Firestore."""
-    try:
-        doc_ref = db.collection(METADATA_COLLECTION).document(actor_name)
-        
-        # Add a 'last_updated' timestamp
-        new_data['last_updated'] = firestore.SERVER_TIMESTAMP
-        
-        doc_ref.update(new_data)
-        st.success(f"Details for '{actor_name}' updated successfully in Firestore!")
-        return True
-    except Exception as e:
-        st.error(f"Error updating details for '{actor_name}' in Firestore: {e}")
-        return False
-
-# --- NEW: Function to delete an actor/actress document from Firestore ---
-def delete_actor_document_from_firestore(actor_name):
-    """Deletes a specific actor/actress document from Firestore."""
-    try:
-        db.collection(METADATA_COLLECTION).document(actor_name).delete()
-        st.success(f"Actor/Actress '{actor_name}' successfully deleted from Firestore!")
-        return True
-    except Exception as e:
-        st.error(f"Error deleting actor/actress '{actor_name}' from Firestore: {e}")
-        return False
 
 # --- Feature Extraction Function ---
 
@@ -450,9 +393,6 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None # 'admin' or 'user'
-if 'actor_data_df' not in st.session_state: # NEW: To store the DataFrame for the editor
-    st.session_state.actor_data_df = pd.DataFrame()
-
 
 # --- Login Functions ---
 def admin_login(username, password):
@@ -499,9 +439,6 @@ def logout():
     load_data_from_firebase.clear()
     train_and_save_model.clear()
     get_actor_metadata.clear() # Clear metadata cache too!
-    get_all_actor_data_for_editor.clear() # NEW: Clear actor data cache
-    st.session_state.actor_data_df = pd.DataFrame() # Reset the dataframe in session state
-
 
 # --- Home Page / Login Screen ---
 if not st.session_state.logged_in:
@@ -529,11 +466,7 @@ else:
     st.sidebar.markdown("---") # Add a separator below the logo
 
     if st.session_state.user_role == 'admin':
-        app_mode = st.sidebar.radio("Go to", [
-            "Admin Panel: Add Speaker Data",
-            "Admin Panel: Retrain Model",
-            "Admin Panel: Manage Actor/Actress Details" # NEW: Added new option
-        ])
+        app_mode = st.sidebar.radio("Go to", ["Admin Panel: Add Speaker Data", "Admin Panel: Retrain Model"])
     elif st.session_state.user_role == 'user':
         app_mode = st.sidebar.radio("Go to", ["User Panel: Recognize Speaker from File", "User Panel: Recognize Speaker Live"])
 
@@ -628,7 +561,6 @@ else:
                             train_and_save_model.clear()
                             load_trained_model.clear()
                             get_actor_metadata.clear() # Clear metadata cache to ensure fresh data for users
-                            get_all_actor_data_for_editor.clear() # NEW: Clear actor data cache for editor
 
                             # Retrain the model with the new data
                             trained_model, id_to_label_map = train_and_save_model()
@@ -659,7 +591,6 @@ else:
                 train_and_save_model.clear()
                 load_trained_model.clear()
                 # No need to clear get_actor_metadata here, as retraining doesn't change metadata
-                get_all_actor_data_for_editor.clear() # NEW: Clear actor data cache for editor
 
                 trained_model, id_to_label_map = train_and_save_model()
                 if trained_model:
@@ -668,84 +599,9 @@ else:
                     st.error("Model retraining failed. Check previous messages for details.")
                 st.rerun()
 
-        # --- NEW ADMIN PANEL SECTION: Manage Actor/Actress Details ---
-        elif app_mode == "Admin Panel: Manage Actor/Actress Details":
-            st.header("📋 View & Update Actor/Actress Details")
-            st.write("Edit existing actor/actress metadata, or delete entries. Changes will be saved directly to Firestore.")
-
-            if st.button("Load Actor/Actress Data", key="load_actor_data_editor"):
-                st.session_state.actor_data_df = get_all_actor_data_for_editor()
-                if st.session_state.actor_data_df.empty:
-                    st.warning("No actor/actress data found in the Firestore collection.")
-            
-            if not st.session_state.actor_data_df.empty:
-                st.subheader("Existing Actor/Actress Details")
-                st.info("Edit values directly in the table. Changes are saved when you click 'Save Changes'.")
-                st.warning("To add a new entry, go to 'Add Speaker Data'. To delete, mark the row(s) and click 'Save Changes'.")
-
-                # Define column configurations for better display and editing experience
-                column_config = {
-                    "Name": st.column_config.Column("Actor/Actress Name", disabled=True), # Name is the document ID
-                    "age": st.column_config.NumberColumn("Age", min_value=1, max_value=120, format="%d years"),
-                    "height": st.column_config.TextColumn("Height", help="e.g., 5'8\" or 175cm"),
-                    "total_films": st.column_config.NumberColumn("Total Films", min_value=0, format="%d"),
-                    "hit_films": st.column_config.NumberColumn("Hit Films", min_value=0, format="%d"),
-                    "industry": st.column_config.TextColumn("Industry", help="e.g., Bollywood, Hollywood"),
-                    "last_updated": st.column_config.DatetimeColumn("Last Updated", disabled=True, format="YYYY-MM-DD HH:mm:ss"),
-                }
-
-                edited_df = st.data_editor(
-                    st.session_state.actor_data_df,
-                    key="actor_data_editor", # Unique key for this data_editor
-                    hide_index=True,
-                    num_rows="fixed", # Keep fixed for editing existing. Use "dynamic" for direct add/delete
-                    column_config=column_config,
-                    use_container_width=True
-                )
-
-                if st.button("Save Changes", key="save_actor_data_changes_btn"):
-                    changes = st.session_state["actor_data_editor"]["edited_rows"]
-                    deleted_rows_indices = st.session_state["actor_data_editor"]["deleted_rows"]
-
-                    action_taken = False
-
-                    # Handle Updates
-                    for row_index, updated_fields in changes.items():
-                        original_actor_name = st.session_state.actor_data_df.iloc[row_index]['Name']
-                        
-                        # Prepare data to send to Firestore, excluding 'Name' (doc ID)
-                        data_to_send = {k: v for k, v in updated_fields.items() if k != 'Name'}
-                        
-                        if data_to_send: # Only update if there are actual field changes
-                            if update_actor_document_in_firestore(original_actor_name, data_to_send):
-                                action_taken = True
-                    
-                    # Handle Deletions
-                    # Iterate in reverse order to avoid index issues if deleting multiple
-                    for row_index in sorted(deleted_rows_indices, reverse=True):
-                        actor_name_to_delete = st.session_state.actor_data_df.iloc[row_index]['Name']
-                        if delete_actor_document_from_firestore(actor_name_to_delete):
-                            action_taken = True
-                            # Remove from the current DataFrame immediately to reflect deletion on client side
-                            st.session_state.actor_data_df = st.session_state.actor_data_df.drop(index=row_index).reset_index(drop=True)
-
-                    if action_taken:
-                        st.success("Changes saved successfully!")
-                        # Clear cache and reload data to reflect all changes from Firestore
-                        get_all_actor_data_for_editor.clear()
-                        # If the dataframe was modified locally due to deletion, no need to reload all data again
-                        # just ensure the edited_df is the source for the next render
-                        st.session_state.actor_data_df = get_all_actor_data_for_editor() # Re-fetch to be absolutely sure
-                        st.rerun() # Rerun to refresh the data editor with the new state
-                    else:
-                        st.info("No changes to save or no actions performed.")
-            else:
-                st.info("Click 'Load Actor/Actress Data' to view and manage details.")
-
-
     # --- User Panel ---
     elif st.session_state.user_role == 'user':
-        st.info("If metadata is not showing for a recognized speaker, the admin might need to add it via the 'Add Speaker Data' panel or 'Manage Actor/Actress Details' panel.")
+        st.info("If metadata is not showing for a recognized speaker, the admin might need to add it via the 'Add Speaker Data' panel.")
 
         if app_mode == "User Panel: Recognize Speaker from File":
             st.header("🔍 Recognize Actor/Actress from a File")
