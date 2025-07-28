@@ -704,7 +704,6 @@ else:
                     else:
                         st.info("Click 'Upload Samples & Save Metadata and Train Model' to finalize and update the model and metadata. (Don't navigate away until done!)")
             else:
-                st.info("Please enter an actor/actress's name to start recording samples and add details.")
                 # Reset session state if name is cleared
                 if 'admin_recorded_samples_count' in st.session_state:
                     del st.session_state.admin_recorded_samples_count
