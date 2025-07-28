@@ -3,7 +3,6 @@ numpy
 scipy
 librosa
 scikit-learn
-pickle
 firebase-admin
 streamlit-audiorec
 pandas
