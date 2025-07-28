@@ -55,7 +55,6 @@ def initialize_firebase_app():
             # Use from_service_account_info to initialize with a dictionary
             cred = credentials.Certificate(firebase_config_dict)
             firebase_admin.initialize_app(cred, {'storageBucket': firebase_storage_bucket})
-            st.success("✅ Firebase initialized successfully from Streamlit secrets.")
             return True
         except (KeyError, json.JSONDecodeError, Exception) as e:
             # Fallback for local development if secrets.toml isn't set up or file is missing
@@ -340,7 +339,6 @@ def load_trained_model():
             model = pickle.load(f)
         with open(temp_labels_path, 'rb') as f:
             id_to_label = pickle.load(f)
-        st.success("✅ Model and labels loaded successfully from Firebase.")
 
         # Clean up temporary downloaded files
         os.remove(temp_model_path)
@@ -494,8 +492,8 @@ else:
 
     # --- Admin Panel ---
     if st.session_state.user_role == 'admin':
-        if app_mode == "Admin Panel: Add Speaker Data":
-            st.header("➕ Add/Record New Actor/Actress Voice Data & Metadata")
+        if app_mode == "Add Speaker Data":
+            st.header("Add/Record New Actor/Actress Voice Data & Metadata")
             st.write("Record multiple voice samples for an actor/actress and provide their details. All data will be uploaded to Firebase Storage and Firestore.")
 
             person_name = st.text_input("Enter the name of the Actor/Actress:", key="admin_person_name_input").strip()
