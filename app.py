@@ -558,7 +558,8 @@ else: # User is logged in
                 if 'admin_current_sample_processed' in st.session_state:
                     del st.session_state.admin_current_sample_processed
 
-            elif app_mode == "Admin Panel: Retrain Model":
+            elif:
+                app_mode == "Admin Panel: Retrain Model":
                 st.header("🔄 Retrain Speaker Recognition Model")
                 st.write("This will retrain the model using all available data in Firebase Storage. This is useful if you've manually added data or want to refresh the model.")
 
