@@ -492,7 +492,7 @@ else:
 
     # --- Admin Panel ---
     if st.session_state.user_role == 'admin':
-        if app_mode == "Add Speaker Data":
+        if app_mode == "Admin Panel: Add Speaker Data":
             st.header("Add/Record New Actor/Actress Voice Data & Metadata")
             st.write("Record multiple voice samples for an actor/actress and provide their details. All data will be uploaded to Firebase Storage and Firestore.")
 
