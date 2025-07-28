@@ -604,7 +604,7 @@ else:
         if app_mode == "Admin Panel: Add Speaker Data":
             st.header("Add/Record New Actor/Actress Voice Data & Metadata")
 
-            person_name = st.text_input("Enter the name of the Actor/Actress (e.g., 'Amitabh Bachchan'):", key="admin_person_name_input").strip()
+            person_name = st.text_input("Enter the name of the Actor/Actress and click ENTER to record samples:", key="admin_person_name_input").strip()
 
             # New input fields for metadata
             st.subheader("Actor/Actress Details")
