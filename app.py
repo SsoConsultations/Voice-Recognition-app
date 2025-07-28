@@ -603,7 +603,6 @@ else:
     if st.session_state.user_role == 'admin':
         if app_mode == "Admin Panel: Add Speaker Data":
             st.header("Add/Record New Actor/Actress Voice Data & Metadata")
-            st.info("Record multiple voice samples for an actor/actress and provide their details. All data will be uploaded to Firebase Storage and Firestore.")
 
             person_name = st.text_input("Enter the name of the Actor/Actress (e.g., 'Amitabh Bachchan'):", key="admin_person_name_input").strip()
 
