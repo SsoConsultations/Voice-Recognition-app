@@ -894,7 +894,6 @@ else:
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
             else:
-                st.info(f"Record for approximately {DEFAULT_DURATION} seconds. Speak clearly. The app will attempt to recognize the speaker.")
 
                 live_audio_data = st_audiorec()
 
