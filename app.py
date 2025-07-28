@@ -123,7 +123,7 @@ def list_files_in_firebase_storage(prefix=""):
     return [blob.name for blob in blobs]
 
 # --- Firestore Metadata Functions ---
-def save_actor_metadata(actor_name, age, height, total_films, hit_films):
+def save_actor_metadata(actor_name, age, height, total_films, hit_films, industry): # Added industry
     """Saves/updates an actor's metadata in Firestore."""
     try:
         doc_ref = db.collection(METADATA_COLLECTION).document(actor_name)
@@ -132,6 +132,7 @@ def save_actor_metadata(actor_name, age, height, total_films, hit_films):
             'height': height,
             'total_films': total_films,
             'hit_films': hit_films,
+            'industry': industry, # Added industry field
             'last_updated': firestore.SERVER_TIMESTAMP
         }, merge=True) # merge=True allows updating specific fields without overwriting the whole document
         st.success(f"Metadata for {actor_name} saved/updated in Firestore.")
@@ -367,6 +368,7 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
         st.write(f"**Height:** {metadata.get('height', 'N/A')}")
         st.write(f"**Total Films:** {metadata.get('total_films', 'N/A')}")
         st.write(f"**Hit Films:** {metadata.get('hit_films', 'N/A')}")
+        st.write(f"**Industry:** {metadata.get('industry', 'N/A')}") # Display industry
     else:
         st.info(f"No additional metadata found for {predicted_speaker}.")
 
@@ -490,6 +492,8 @@ else:
             with col_meta2:
                 height = st.text_input("Height (e.g., 5'8\" or 175cm):", value="N/A", key="actor_height_input")
                 hit_films = st.number_input("Hit Films:", min_value=0, value=2, key="actor_hit_films_input")
+            
+            industry = st.text_input("Industry (e.g., Bollywood, Hollywood, Tollywood):", value="N/A", key="actor_industry_input") # Added industry input
 
             if person_name:
                 st.info(f"You will record {DEFAULT_NUM_SAMPLES} samples for **{person_name}**, each {DEFAULT_DURATION} seconds long.")
@@ -545,8 +549,8 @@ else:
 
                             st.info(f"{uploaded_audio_count} audio samples uploaded for {person_name}.")
 
-                            # Save metadata to Firestore
-                            if save_actor_metadata(person_name, age, height, total_films, hit_films):
+                            # Save metadata to Firestore (Updated call with 'industry')
+                            if save_actor_metadata(person_name, age, height, total_films, hit_films, industry):
                                 st.info(f"Metadata for {person_name} successfully saved.")
                             else:
                                 st.error(f"Failed to save metadata for {person_name}.")
