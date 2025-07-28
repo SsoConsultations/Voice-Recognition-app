@@ -11,6 +11,7 @@ import pickle
 import time
 import io # For handling in-memory audio data (BytesIO)
 import json # For handling Firebase service account JSON
+import pandas as pd # NEW: For handling data with st.data_editor
 
 # Firebase imports
 import firebase_admin
@@ -154,6 +155,21 @@ def get_actor_metadata(actor_name):
     except Exception as e:
         st.error(f"❌ Error retrieving metadata for {actor_name} from Firestore: {e}")
         return None
+
+@st.cache_data(ttl=3600, show_spinner="Loading all actor/actress metadata...") # NEW FUNCTION
+def get_all_actor_metadata():
+    """Retrieves all actor/actress metadata from Firestore."""
+    try:
+        docs = db.collection(METADATA_COLLECTION).stream()
+        all_metadata = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['Name'] = doc.id # The document ID is the actor's name
+            all_metadata.append(data)
+        return pd.DataFrame(all_metadata)
+    except Exception as e:
+        st.error(f"❌ Error retrieving all metadata from Firestore: {e}")
+        return pd.DataFrame() # Return empty DataFrame on error
 
 # --- Feature Extraction Function ---
 
@@ -439,6 +455,7 @@ def logout():
     load_data_from_firebase.clear()
     train_and_save_model.clear()
     get_actor_metadata.clear() # Clear metadata cache too!
+    get_all_actor_metadata.clear() # NEW: Clear all metadata cache on logout
 
 # --- Home Page / Login Screen ---
 if not st.session_state.logged_in:
@@ -466,7 +483,7 @@ else:
     st.sidebar.markdown("---") # Add a separator below the logo
 
     if st.session_state.user_role == 'admin':
-        app_mode = st.sidebar.radio("Go to", ["Admin Panel: Add Speaker Data", "Admin Panel: Retrain Model"])
+        app_mode = st.sidebar.radio("Go to", ["Admin Panel: Add Speaker Data", "Admin Panel: Retrain Model", "Admin Panel: View/Update Actor Details"]) # MODIFIED: Added new option
     elif st.session_state.user_role == 'user':
         app_mode = st.sidebar.radio("Go to", ["User Panel: Recognize Speaker from File", "User Panel: Recognize Speaker Live"])
 
@@ -492,7 +509,7 @@ else:
             with col_meta2:
                 height = st.text_input("Height (e.g., 5'8\" or 175cm):", value="N/A", key="actor_height_input")
                 hit_films = st.number_input("Hit Films:", min_value=0, value=2, key="actor_hit_films_input")
-            
+
             industry = st.text_input("Industry (e.g., Bollywood, Hollywood, Tollywood):", value="N/A", key="actor_industry_input") # Added industry input
 
             if person_name:
@@ -517,7 +534,7 @@ else:
                             # Process the recorded audio
                             with st.spinner("Processing recorded sample..."):
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
+                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name.replace(' ', '_').replace('/', '_')}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav") # Use replace for valid filename
 
                                 with open(local_filename, "wb") as f:
                                     f.write(wav_audio_data)
@@ -542,7 +559,7 @@ else:
                         with st.spinner("Uploading samples to Firebase, saving metadata, and retraining model..."):
                             uploaded_audio_count = 0
                             for local_file_path in st.session_state.admin_temp_audio_files:
-                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}" # Ensure consistent naming with metadata
+                                firebase_path = f"data/{person_name.replace(' ', '_').replace('/', '_')}/{os.path.basename(local_file_path)}" # Ensure consistent naming with metadata
                                 if upload_audio_to_firebase(local_file_path, firebase_path):
                                     uploaded_audio_count += 1
                                 os.remove(local_file_path) # Clean up local temp file
@@ -561,6 +578,7 @@ else:
                             train_and_save_model.clear()
                             load_trained_model.clear()
                             get_actor_metadata.clear() # Clear metadata cache to ensure fresh data for users
+                            get_all_actor_metadata.clear() # NEW: Clear all metadata cache
 
                             # Retrain the model with the new data
                             trained_model, id_to_label_map = train_and_save_model()
@@ -591,6 +609,9 @@ else:
                 train_and_save_model.clear()
                 load_trained_model.clear()
                 # No need to clear get_actor_metadata here, as retraining doesn't change metadata
+                # get_all_actor_metadata.clear() is not strictly needed here as model doesn't use it, but safe to clear
+                get_all_actor_metadata.clear()
+
 
                 trained_model, id_to_label_map = train_and_save_model()
                 if trained_model:
@@ -598,6 +619,129 @@ else:
                 else:
                     st.error("Model retraining failed. Check previous messages for details.")
                 st.rerun()
+
+        elif app_mode == "Admin Panel: View/Update Actor Details": # NEW ADMIN PANEL SECTION
+            st.header("📝 View and Update Actor/Actress Details")
+            st.write("Edit actor/actress metadata directly in the table below. Changes will be saved to Firestore.")
+
+            # Load all existing metadata
+            current_df = get_all_actor_metadata()
+
+            if not current_df.empty:
+                # Reorder columns for better display, put 'Name' first
+                # Ensure all expected columns are present, add if missing (e.g., if old data doesn't have 'industry')
+                display_cols_order = ['Name', 'age', 'height', 'total_films', 'hit_films', 'industry', 'last_updated']
+                for col in display_cols_order:
+                    if col not in current_df.columns:
+                        current_df[col] = None # Add missing columns as None/NaN
+
+                current_df = current_df.reindex(columns=display_cols_order)
+
+                st.subheader("Current Actor/Actress Data")
+                # Make 'Name' and 'last_updated' columns non-editable
+                column_config = {
+                    "Name": st.column_config.TextColumn(
+                        "Actor/Actress Name",
+                        disabled=True, # Make name not directly editable as it's the document ID
+                    ),
+                    "last_updated": st.column_config.DatetimeColumn(
+                        "Last Updated",
+                        format="YYYY-MM-DD HH:mm:ss",
+                        disabled=True,
+                    ),
+                    "age": st.column_config.NumberColumn(
+                        "Age (Years)",
+                        min_value=1, max_value=120, step=1,
+                        # Default to None for empty values
+                        default=None
+                    ),
+                    "total_films": st.column_config.NumberColumn(
+                        "Total Films",
+                        min_value=0, step=1,
+                        default=None
+                    ),
+                    "hit_films": st.column_config.NumberColumn(
+                        "Hit Films",
+                        min_value=0, step=1,
+                        default=None
+                    ),
+                    "height": st.column_config.TextColumn(
+                        "Height (e.g., 5'8\" or 175cm)"
+                    ),
+                    "industry": st.column_config.TextColumn(
+                        "Industry (e.g., Bollywood)"
+                    )
+                }
+
+                edited_df = st.data_editor(
+                    current_df,
+                    key="actor_details_editor",
+                    num_rows="fixed", # Prevent adding/deleting rows from here directly
+                    use_container_width=True,
+                    column_config=column_config
+                )
+
+                if st.button("Save Changes to Firestore", key="save_actor_details_btn"):
+                    # Check for changes and update Firestore
+                    has_changes = False
+                    for index, row in edited_df.iterrows():
+                        original_row = current_df.loc[index]
+                        actor_name = row['Name']
+
+                        # Compare edited row with original row
+                        changed_fields = {}
+                        for col in original_row.index:
+                            # Skip 'last_updated' as it's updated by Firestore server timestamp
+                            if col == 'last_updated' or col == 'Name': # Skip Name as well, it's the ID
+                                continue
+
+                            # Compare values, handling potential type differences or NaN/None
+                            original_value = original_row[col]
+                            edited_value = row[col]
+
+                            # Convert numpy types to native Python types for comparison/Firestore
+                            # This helps with st.data_editor which can return numpy types
+                            if isinstance(original_value, np.integer):
+                                original_value = int(original_value)
+                            if isinstance(edited_value, np.integer):
+                                edited_value = int(edited_value)
+                            if isinstance(original_value, np.floating):
+                                original_value = float(original_value)
+                            if isinstance(edited_value, np.floating):
+                                edited_value = float(edited_value)
+
+                            # Handle potential NaNs from number inputs if they were cleared
+                            if pd.isna(edited_value):
+                                edited_value = None
+                            if pd.isna(original_value):
+                                original_value = None
+
+                            # Compare values. Convert to string for robust comparison if types are mixed
+                            if str(original_value) != str(edited_value):
+                                changed_fields[col] = edited_value
+
+                        if changed_fields:
+                            st.info(f"Detected changes for **{actor_name}**: {changed_fields}")
+                            # Update the document in Firestore
+                            try:
+                                doc_ref = db.collection(METADATA_COLLECTION).document(actor_name)
+                                doc_ref.set(changed_fields, merge=True) # Use merge=True
+                                st.success(f"Updated {actor_name}'s details in Firestore.")
+                                has_changes = True
+                            except Exception as e:
+                                st.error(f"❌ Error updating {actor_name} in Firestore: {e}")
+
+                    if has_changes:
+                        st.success("All detected changes saved successfully!")
+                        # Clear cache to force reload of updated metadata
+                        get_all_actor_metadata.clear()
+                        get_actor_metadata.clear() # Also clear single actor cache
+                        st.rerun() # Rerun to display updated table
+                    else:
+                        st.info("No changes detected to save.")
+            else:
+                st.info("No actor/actress metadata found in Firestore to display.")
+                st.warning("Please add new actor/actress data first using the 'Add Speaker Data' panel.")
 
     # --- User Panel ---
     elif st.session_state.user_role == 'user':
@@ -619,24 +763,21 @@ else:
                     st.write("Analyzing uploaded file...")
                     recognized_speaker, metadata = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
                     # The display of metadata is now handled directly within recognize_speaker_from_audio_source
-                    st.success(f"File analysis complete.")
 
         elif app_mode == "User Panel: Recognize Speaker Live":
-            st.header("🎤 Recognize Actor/Actress from Live Microphone Input")
+            st.header("🎤 Recognize Actor/Actress Live")
 
             if trained_model is None:
                 st.warning("Cannot recognize. Model not trained or loaded. Please inform the admin to train one.")
             else:
-                st.write(f"Click 'Start Recording' and speak for a few seconds to get a live prediction.")
+                st.info(f"Record for approximately {DEFAULT_DURATION} seconds. The app will attempt to recognize the speaker.")
 
-                wav_audio_data = st_audiorec()
+                live_audio_data = st_audiorec(key="live_recognition_recorder")
 
-                if wav_audio_data is not None:
-                    st.audio(wav_audio_data, format='audio/wav')
-
-                    audio_buffer = io.BytesIO(wav_audio_data)
+                if live_audio_data is not None:
+                    st.audio(live_audio_data, format='audio/wav')
+                    audio_buffer = io.BytesIO(live_audio_data) # st_audiorec returns bytes directly
 
                     st.write("Analyzing live recording...")
                     recognized_speaker, metadata = recognize_speaker_from_audio_source(trained_model, id_to_label_map, audio_buffer, DEFAULT_SAMPLE_RATE)
                     # The display of metadata is now handled directly within recognize_speaker_from_audio_source
-                    st.success(f"Live analysis complete.")
