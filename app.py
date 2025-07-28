@@ -320,7 +320,7 @@ def recognize_speaker_from_audio_source(model, id_to_label, audio_source_buffer,
 
 # --- Streamlit UI Layout ---
 
-st.set_page_config(page_title="Speaker Recognition", layout="centered", initial_sidebar_state="collapsed") # Changed to 'collapsed'
+st.set_page_config(page_title="Speaker Recognition", layout="centered", initial_sidebar_state="expanded") # Changed to 'collapsed'
 
 # Inject custom CSS for spacing and alignment
 st.markdown("""
