@@ -562,18 +562,18 @@ else: # User is logged in
             st.header("🔄 Retrain Speaker Recognition Model")
             st.write("This will retrain the model using all available data in Firebase Storage. This is useful if you've manually added data or want to refresh the model.")
 
-                if st.button("Trigger Model Retraining", key="trigger_retrain_btn"):
+            if st.button("Trigger Model Retraining", key="trigger_retrain_btn"):
                     # Clear all relevant caches before retraining
-                    load_data_from_firebase.clear()
-                    train_and_save_model.clear()
-                    load_trained_model.clear()
+                load_data_from_firebase.clear()
+                train_and_save_model.clear()
+                load_trained_model.clear()
                     
-                    trained_model, id_to_label_map = train_and_save_model()
-                    if trained_model:
-                        st.success("Model retraining initiated and completed successfully!")
-                    else:
-                        st.error("Model retraining failed. Check previous messages for details.")
-                    st.rerun()
+                trained_model, id_to_label_map = train_and_save_model()
+                if trained_model:
+                    st.success("Model retraining initiated and completed successfully!")
+                else:
+                    st.error("Model retraining failed. Check previous messages for details.")
+                st.rerun()
 
         # --- User Panel ---
         elif st.session_state.user_role == 'user':
