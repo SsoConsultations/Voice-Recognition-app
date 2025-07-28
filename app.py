@@ -646,8 +646,7 @@ else:
                             with st.spinner("Processing recorded sample..."):
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                                 # Sanitize person_name for filename (replace spaces with underscores, remove special chars)
-                                safe_person_name = "".join(c for c in person_name if c.isalnum() or c == ' ').strip().replace(' ', '_')
-                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{safe_person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav")
+                                local_filename = os.path.join(TEMP_RECORDINGS_DIR, f"{person_name}_sample_{st.session_state.admin_recorded_samples_count + 1}_{timestamp}.wav")
 
                                 try:
                                     with open(local_filename, "wb") as f:
@@ -676,8 +675,7 @@ else:
                             uploaded_audio_count = 0
                             for local_file_path in st.session_state.admin_temp_audio_files:
                                 # Ensure consistent naming with metadata by using the sanitized name
-                                safe_person_name = "".join(c for c in person_name if c.isalnum() or c == ' ').strip().replace(' ', '_')
-                                firebase_path = f"data/{safe_person_name}/{os.path.basename(local_file_path)}"
+                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
                                 if upload_audio_to_firebase(local_file_path, firebase_path):
                                     uploaded_audio_count += 1
                                 try:
