@@ -403,6 +403,11 @@ if not st.session_state.logged_in:
                     st.rerun()
 
 else:
+    # --- Sidebar content ---
+    # Add your logo to the sidebar here
+    st.sidebar.image("sso_logo.png", width=150) # Adjust width as needed for sidebar logo
+    st.sidebar.markdown("---") # Add a separator below the logo
+
     if st.session_state.user_role == 'admin':
         app_mode = st.sidebar.radio("Go to", ["Admin Panel: Add Speaker Data", "Admin Panel: Retrain Model"])
     elif st.session_state.user_role == 'user':
@@ -468,8 +473,7 @@ else:
                         with st.spinner("Uploading samples to Firebase and retraining model..."):
                             uploaded_count = 0
                             for local_file_path in st.session_state.admin_temp_audio_files:
-                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"
-                                if upload_audio_to_firebase(local_file_path, firebase_path):
+                                firebase_path = f"data/{person_name}/{os.path.basename(local_file_path)}"<br>                                if upload_audio_to_firebase(local_file_path, firebase_path):
                                     uploaded_count += 1
                                 os.remove(local_file_path) # Clean up local temp file
 
@@ -485,7 +489,7 @@ else:
                             st.session_state.admin_recorded_samples_count = 0 # Reset for next session
                             st.session_state.admin_temp_audio_files = []
                             st.session_state.admin_current_sample_processed = False # Reset for next session
-                            st.rerun()  
+                            st.rerun()
                     else:
                         st.info("Click 'Upload Samples and Train Model' to finalize and update the model.")
             else:
