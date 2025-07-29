@@ -105,6 +105,7 @@ def upload_audio_to_firebase(local_file_path, destination_blob_name):
         bucket = storage.bucket()
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(local_file_path)
+        st.success(f"Uploaded {os.path.basename(local_file_path)} to Firebase Storage.")
         return True
     except Exception as e:
         st.error(f"❌ Error uploading {os.path.basename(local_file_path)} to Firebase: {e}")
