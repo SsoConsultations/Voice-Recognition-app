@@ -532,15 +532,19 @@ def admin_login(username, password):
         return False
 
 def user_login(username, password):
-    # Fetch credentials from Streamlit secrets
+    # Fetch user credentials from Streamlit secrets
     try:
-        USER_USERNAME = st.secrets["login"]["user_username"]
-        USER_PASSWORD = st.secrets["login"]["user_password"]
-    except KeyError:
-        st.error("User login credentials not found in Streamlit secrets.toml. Please configure them.")
+        # Define users with a dictionary for easier management
+        users = {
+            st.secrets["login"]["user1_username"]: st.secrets["login"]["user1_password"],
+            st.secrets["login"]["user2_username"]: st.secrets["login"]["user2_password"]
+            # Add more users here as needed
+        }
+    except KeyError as e:
+        st.error(f"User login credentials not found in Streamlit secrets.toml: {e}. Please configure them.")
         return False
 
-    if username == USER_USERNAME and password == USER_PASSWORD:
+    if username in users and users[username] == password:
         st.session_state.logged_in = True
         st.session_state.user_role = 'user'
         st.success("User login successful!")
@@ -548,7 +552,7 @@ def user_login(username, password):
     else:
         st.error("Invalid user credentials.")
         return False
-
+        
 def logout():
     st.session_state.logged_in = False
     st.session_state.user_role = None
