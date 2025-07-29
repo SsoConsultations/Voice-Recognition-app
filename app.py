@@ -246,7 +246,6 @@ def load_data_from_firebase(data_prefix="data"):
         st.warning(f"No speaker audio data found in Firebase Storage under '{data_prefix}'. Please add data in the Admin Panel.")
         return np.array([]), np.array([]), {}, []
 
-    st.info(f"Processing speakers found in Firebase: {', '.join(speaker_names)}")
 
     total_audio_files = sum(1 for blob in all_blobs if blob.endswith('.wav'))
     if total_audio_files == 0:
