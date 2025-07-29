@@ -534,10 +534,8 @@ def admin_login(username, password):
 def user_login(username, password):
     # Fetch credentials from Streamlit secrets
     try:
-        USER1_USERNAME = st.secrets["login"]["user1_username"]
-        USER1_PASSWORD = st.secrets["login"]["user1_password"]
-        USER2_USERNAME = st.secrets["login"]["user2_username"]
-        USER2_PASSWORD = st.secrets["login"]["user2_password"]
+        USER_USERNAME = st.secrets["login"]["user_username"]
+        USER_PASSWORD = st.secrets["login"]["user_password"]
     except KeyError:
         st.error("User login credentials not found in Streamlit secrets.toml. Please configure them.")
         return False
